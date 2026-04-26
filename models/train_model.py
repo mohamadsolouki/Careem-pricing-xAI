@@ -27,8 +27,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.preprocessing import LabelEncoder
 import xgboost as xgb
+
+from feature_engineering import TARGET, prepare_training_frame
 
 warnings.filterwarnings("ignore")
 
@@ -49,76 +50,17 @@ print(f"  Rows: {len(df):,} | Columns: {df.shape[1]}")
 df = df[df["booking_status"] == "Completed"].copy()
 print(f"  Completed rides for modelling: {len(df):,}")
 
+month_labels = df["month"].values
+
 # ─── 2. Feature Engineering ───────────────────────────────────────────────────
 print("Engineering features...")
-
-# 2a. Cyclical encoding of time (avoids ordinal bias at midnight/year wrap)
-df["hour_sin"]  = np.sin(2 * np.pi * df["hour"] / 24)
-df["hour_cos"]  = np.cos(2 * np.pi * df["hour"] / 24)
-df["dow_sin"]   = np.sin(2 * np.pi * df["day_of_week"] / 7)
-df["dow_cos"]   = np.cos(2 * np.pi * df["day_of_week"] / 7)
-df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
-df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
-
-# 2b. Interaction features (improve SHAP interpretability)
-df["rain_x_peak"]    = df["is_rain"].astype(int)    * df["is_peak_hour"].astype(int)
-df["storm_x_peak"]   = df["is_sandstorm"].astype(int) * df["is_peak_hour"].astype(int)
-df["ramadan_x_hour"] = df["is_ramadan"].astype(int) * df["hour"]
-df["event_x_peak"]   = (df["active_event"] != "None").astype(int) * df["is_peak_hour"].astype(int)
-df["airport_x_peak"] = df["is_airport_ride"].astype(int) * df["is_peak_hour"].astype(int)
-
-# 2c. One-hot encode categoricals
-CAT_COLS = ["pickup_zone", "dropoff_zone", "product_type", "payment_method", "event_type"]
-df_enc = pd.get_dummies(df, columns=CAT_COLS, drop_first=False, dtype=int)
-
-# 2d. Boolean flags → int
-BOOL_COLS = [
-    "is_weekend", "is_peak_hour", "is_late_night", "is_ramadan",
-    "is_uae_public_holiday", "is_suhoor_window", "is_iftar_window",
-    "is_rain", "is_sandstorm", "is_airport_ride", "is_intrazone_trip",
-    "is_careem_plus"
-]
-for c in BOOL_COLS:
-    if c in df_enc.columns:
-        df_enc[c] = df_enc[c].astype(int)
-
-# ─── 3. Feature Selection ─────────────────────────────────────────────────────
-# Exclude identifiers, raw timestamps, outcome cols that leak the target
-EXCLUDE = [
-    "ride_id", "customer_id", "captain_id",
-    "timestamp", "date", "day_name", "month_name",
-    "week_of_year",                         # captured via month_sin/cos
-    "hour", "day_of_week", "month",         # replaced by cyclical encoding
-    "minute",                               # noise
-    "final_price_aed",                      # TARGET
-    "metered_fare_aed",                     # component of target — data leakage
-    "price_per_km_aed",                     # derived from target
-    "surge_multiplier",                     # direct component — leakage
-    "booking_status", "cancellation_reason",# outcome cols
-    "captain_rating", "customer_rating",    # post-ride outcomes
-    "eta_deviation_min",                    # post-ride outcome
-    "active_event",                         # replaced by event_type dummies
-    "pickup_area_type", "dropoff_area_type",# captured via zone dummies
-    "product_segment",                      # captured via product_type dummies
-    "quarter",                              # captured via month_sin/cos
-]
-EXCLUDE_PRESENT = [c for c in EXCLUDE if c in df_enc.columns]
-
-FEATURE_COLS = [c for c in df_enc.columns if c not in EXCLUDE_PRESENT]
-TARGET = "final_price_aed"
-
-X = df_enc[FEATURE_COLS].fillna(0)
-y = df_enc[TARGET]
+X, y, FEATURE_COLS, df_enc = prepare_training_frame(df)
 
 print(f"  Features: {len(FEATURE_COLS)}")
 print(f"  Target range: AED {y.min():.2f} – {y.max():.2f} | Mean: {y.mean():.2f}")
 
 # ─── 4. Train / Test Split (stratified by month) ─────────────────────────────
 print("Splitting train/test by month...")
-# Assign month back from df_enc (already dropped "month" col in EXCLUDE,
-# but we kept the cyclical versions; use original df for stratification label)
-month_labels = df["month"].values
-
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.20, random_state=42, stratify=month_labels
 )

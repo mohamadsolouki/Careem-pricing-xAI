@@ -388,11 +388,19 @@ payment_method = np.random.choice(PAY_METHODS, size=N_RIDES, p=PAY_PROBS)
 is_careem_plus = (payment_method == "Careem Plus")
 
 # ── 14. Supply & trip metrics ────────────────────────────────────────────────
-zone_demand = Z_DM[pu_idx] * event_dmult * weather_dmult
+temporal_demand = np.where(is_peak, 1.18, np.where(is_night, 0.92, 1.00))
+ramadan_demand = np.where(is_iftar, 1.35, np.where(is_suhoor, 1.15, np.where(is_ramadan, 0.96, 1.00)))
+weekend_demand = np.where(is_weekend_uae, 1.05, 1.00)
+demand_index = np.clip(
+    Z_DM[pu_idx] * event_dmult * weather_dmult * temporal_demand * ramadan_demand * weekend_demand,
+    0.75,
+    3.00,
+)
 captain_avail = np.clip(
-    1.0 - 0.35*(zone_demand - 1.0) + np.random.normal(0, 0.10, N_RIDES),
+    1.0 - 0.32*(demand_index - 1.0) + np.random.normal(0, 0.10, N_RIDES),
     0.15, 1.00
 )
+supply_pressure_index = np.clip(1.0 - captain_avail, 0.0, 1.0)
 wait_base = np.where(is_airport, 5.5,
             np.where(is_peak, 4.5, 3.0))
 wait_time = np.clip(
@@ -431,7 +439,7 @@ hala_fare   = hala_start + per_km_arr * route_distance_km + wait_time * 0.50 + s
 hala_final  = np.maximum(hala_fare, min_fare)
 
 # Private hire (Careem dynamic pricing: base + per-km + per-min * full duration)
-demand_supply_gap = np.clip(zone_demand - 1.0, 0.0, 1.5)
+demand_supply_gap = np.clip(demand_index - captain_avail, 0.0, 1.5)
 surge_mult  = np.clip(1.0 + demand_supply_gap * 0.55, 1.00, 2.50)
 ph_base     = flagfall + booking_fee
 ph_fare     = ph_base + (per_km_arr * route_distance_km + per_min_arr * trip_duration_min) * surge_mult + salik_cost
@@ -487,7 +495,7 @@ df = pd.DataFrame({
     "quarter":                    timestamps.quarter.values,
     "is_weekend":                 is_weekend_uae,
     "is_peak_hour":               is_peak,
-    "is_night":                   is_night,
+    "is_late_night":              is_night,
     "is_offpeak":                 is_offpk,
     "is_ramadan":                 is_ramadan,
     "is_uae_public_holiday":      is_holiday,
@@ -518,7 +526,9 @@ df = pd.DataFrame({
     "is_hala_product":            is_hala_product,
     "payment_method":             payment_method,
     "is_careem_plus":             is_careem_plus,
+    "demand_index":               np.round(demand_index, 3),
     "captain_availability_score": np.round(captain_avail, 3),
+    "supply_pressure_index":      np.round(supply_pressure_index, 3),
     "wait_time_min":              np.round(wait_time, 1),
     "trip_duration_min":          np.round(trip_duration_min, 1),
     "avg_speed_kmh":              np.round(avg_speed, 1),
@@ -545,6 +555,7 @@ print(f"  Avg price (compl.): AED {completed['final_price_aed'].mean():.2f}")
 print(f"  Price range:        AED {df['final_price_aed'].min():.2f} - {df['final_price_aed'].max():.2f}")
 print(f"  Avg distance:       {df['route_distance_km'].mean():.1f} km")
 print(f"  Avg Salik gates:    {df['salik_gates'].mean():.2f}")
+print(f"  Avg demand index:   {df['demand_index'].mean():.2f}")
 print(f"  Hala rides:         {df['is_hala_product'].sum():,} ({100*df['is_hala_product'].mean():.1f}%)")
 print(f"\n  Product mix:")
 for p in PROD_NAMES:
