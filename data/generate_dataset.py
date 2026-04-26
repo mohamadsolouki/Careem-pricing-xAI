@@ -317,7 +317,7 @@ is_peak = np.where(
 is_night  = (hour_choice >= 22) | (hour_choice < 6)
 is_offpk  = (~is_peak) & (~is_night)
 
-is_ramadan = is_ram_day.values
+is_ramadan = np.asarray(is_ram_day)
 is_suhoor  = is_ramadan & ((hour_choice >= 1) & (hour_choice <= 3))
 is_iftar   = is_ramadan & (hour_choice == 17)
 date_strs  = timestamps.strftime("%Y-%m-%d")
@@ -336,13 +336,16 @@ for ev in EVENTS:
 # ── 11. Zones ───────────────────────────────────────────────────────────────
 print("Sampling zones...")
 pu_idx = np.random.choice(len(ZONE_NAMES), size=N_RIDES, p=ZONE_PICK_W_APT)
-# Dropoff: uniform over all other zones
+# Dropoff: weighted over all zones except pickup (vectorised — 12 loops, not 165k)
+COND_DO = np.zeros((len(ZONE_NAMES), len(ZONE_NAMES)))
+for _p in range(len(ZONE_NAMES)):
+    _pr = ZONE_PICK_W.copy(); _pr[_p] = 0.0; _pr /= _pr.sum()
+    COND_DO[_p] = _pr
 do_idx = np.zeros(N_RIDES, dtype=int)
-for i in range(N_RIDES):
-    probs = ZONE_PICK_W.copy()
-    probs[pu_idx[i]] = 0
-    probs /= probs.sum()
-    do_idx[i] = np.random.choice(len(ZONE_NAMES), p=probs)
+for _p in range(len(ZONE_NAMES)):
+    _m = pu_idx == _p
+    if _m.sum():
+        do_idx[_m] = np.random.choice(len(ZONE_NAMES), size=_m.sum(), p=COND_DO[_p])
 
 pickup_zone  = np.array(ZONE_NAMES)[pu_idx]
 dropoff_zone = np.array(ZONE_NAMES)[do_idx]
