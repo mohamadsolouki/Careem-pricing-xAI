@@ -1,1033 +1,558 @@
-#!/usr/bin/env python3
 """
-Dubai Ride-Hailing Mirror Dataset Generator
-===========================================
-XPrice Project — MIT 622 Data Analytics for Managers
-Group 1: Mohammadsadegh Solouki · Artin Fateh Basharzad · Fatema Alblooshi
+XPrice — Dubai Ride-Hailing Mirror Dataset Generator v2.0
+=========================================================
+Generates ~165,000 realistic Dubai ride records for 2025.
 
-Generates a synthetic mirror dataset (~160,000 records) of Careem ride-hailing
-operations in Dubai, 2025. All parameters are calibrated to publicly documented
-operational data (Careem Engineering Blog, e& FY2025 Report, WTW 2024 MENA
-Ride-Hailing Report, Dubai Events Calendar, and UAE historical weather profiles).
+Pricing model calibrated to RTA's November 2025 dynamic fare structure:
+  Hala products (RTA-regulated taxis):
+    - Flagfall AED 5.00 (peak/day) | AED 5.50 (night)
+    - Airport pickup flagfall: AED 25 (replaces flagfall + booking fee)
+    - Dynamic booking fee: AED 7.50 (peak) | AED 4.00 (off-peak/night)
+    - Per-km: AED 2.20 (adjusts +/-AED 0.06 monthly with fuel index)
+    - Waiting (stationary): AED 0.50/min
+    - Minimum fare: AED 13 (app-booked)
+  Private hire products (Careem-set rates):
+    - Base fare + booking fee + per-km + per-min (full trip duration)
+    - Careem surge multiplier on demand-supply imbalance
+  All products:
+    - Salik toll: AED 4.00 per gate crossed
+  Peak hours (Mon-Thu): 08:00-10:00 and 16:00-20:00
+  Peak hours (Fri):     16:00-24:00
+  Night:                22:00-06:00
+  Off-peak:             all other hours
 
-This is a researcher-constructed dataset used to demonstrate the XPrice XAI
-framework — it is not proprietary Careem operational data.
-
-Usage:
-    python generate_dataset.py
-
-Output:
-    data/processed/dubai_rides_2025.csv
-    data/DATA_DICTIONARY.md  (auto-generated)
+Sources:
+  RTA dynamic taxi fare update (Gulf News, Nov 2025)
+  Careem Engineering Blog - YODA ML platform (2020)
+  e& FY2025 Annual Report | WTW 2024 MENA Rideshare Report
 """
 
-import pandas as pd
+import os, sys, json, warnings
 import numpy as np
-from datetime import datetime, timedelta, date
-import json
-import os
-import time
+import pandas as pd
+from datetime import datetime, timedelta
 
-# ── Reproducibility ──────────────────────────────────────────────────────────
-SEED = 42
-np.random.seed(SEED)
+warnings.filterwarnings("ignore")
+np.random.seed(42)
 
-# ═════════════════════════════════════════════════════════════════════════════
-# 1. DUBAI ZONE DEFINITIONS
-#    16 zones covering Dubai's main operational areas.
-#    Coordinates are real centroids; demand_tier reflects commercial intensity.
-# ═════════════════════════════════════════════════════════════════════════════
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT_PATH = os.path.join(BASE_DIR, "data", "processed", "dubai_rides_2025.csv")
+os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+
+N_RIDES = 165_000
+
+# ── 1. Dubai zones ──────────────────────────────────────────────────────────
 ZONES = {
-    "Downtown Dubai": {
-        "lat": 25.1972, "lon": 55.2796,
-        "demand_tier": "very_high",
-        "area_type": "tourist_commercial",
-        "base_captain_density": 0.92,
-        "notes": "Burj Khalifa, Dubai Mall, Fountain — highest tourist footfall"
-    },
-    "Business Bay": {
-        "lat": 25.1865, "lon": 55.2628,
-        "demand_tier": "high",
-        "area_type": "commercial",
-        "base_captain_density": 0.85,
-        "notes": "Dense corporate towers, Mon–Fri corporate commute dominant"
-    },
-    "DIFC": {
-        "lat": 25.2118, "lon": 55.2826,
-        "demand_tier": "high",
-        "area_type": "financial_commercial",
-        "base_captain_density": 0.82,
-        "notes": "Dubai International Financial Centre — high-value business rides"
-    },
-    "Dubai Marina": {
-        "lat": 25.0763, "lon": 55.1303,
-        "demand_tier": "very_high",
-        "area_type": "tourist_residential",
-        "base_captain_density": 0.90,
-        "notes": "Upscale waterfront — strong weekend/evening demand"
-    },
-    "JBR": {
-        "lat": 25.0774, "lon": 55.1296,
-        "demand_tier": "high",
-        "area_type": "tourist_beach",
-        "base_captain_density": 0.85,
-        "notes": "Jumeirah Beach Residence — beach, restaurants, tourist strip"
-    },
-    "Palm Jumeirah": {
-        "lat": 25.1124, "lon": 55.1390,
-        "demand_tier": "high",
-        "area_type": "luxury_residential",
-        "base_captain_density": 0.75,
-        "notes": "Luxury island — higher fares, lower volume, Atlantis trips"
-    },
-    "Jumeirah": {
-        "lat": 25.2084, "lon": 55.2450,
-        "demand_tier": "medium",
-        "area_type": "residential",
-        "base_captain_density": 0.70,
-        "notes": "Expat residential — steady but lower-density demand"
-    },
-    "Deira": {
-        "lat": 25.2631, "lon": 55.3246,
-        "demand_tier": "high",
-        "area_type": "commercial_old_city",
-        "base_captain_density": 0.85,
-        "notes": "Gold Souk, Spice Souk, Port — high South Asian commuter demand"
-    },
-    "Bur Dubai": {
-        "lat": 25.2532, "lon": 55.3000,
-        "demand_tier": "medium",
-        "area_type": "mixed_old_city",
-        "base_captain_density": 0.80,
-        "notes": "Historic district, mixed residential/commercial"
-    },
-    "Dubai Airport (DXB)": {
-        "lat": 25.2532, "lon": 55.3657,
-        "demand_tier": "very_high",
-        "area_type": "airport",
-        "base_captain_density": 0.95,
-        "notes": "Dubai International Airport — consistent 24/7 demand"
-    },
-    "Al Quoz": {
-        "lat": 25.1548, "lon": 55.2347,
-        "demand_tier": "low",
-        "area_type": "industrial",
-        "base_captain_density": 0.50,
-        "notes": "Industrial/warehouse district — low demand, captains reluctant"
-    },
-    "Dubai Hills": {
-        "lat": 25.0912, "lon": 55.2400,
-        "demand_tier": "medium",
-        "area_type": "residential_suburban",
-        "base_captain_density": 0.65,
-        "notes": "Newer suburban residential — growing demand"
-    },
-    "Al Barsha": {
-        "lat": 25.1059, "lon": 55.2015,
-        "demand_tier": "medium",
-        "area_type": "residential_commercial",
-        "base_captain_density": 0.72,
-        "notes": "Mall of the Emirates area — steady mid-range demand"
-    },
-    "Mirdif": {
-        "lat": 25.2197, "lon": 55.4144,
-        "demand_tier": "medium",
-        "area_type": "residential_suburban",
-        "base_captain_density": 0.60,
-        "notes": "Eastern residential suburb — longer trips to city core"
-    },
-    "Karama": {
-        "lat": 25.2375, "lon": 55.3057,
-        "demand_tier": "medium",
-        "area_type": "residential_commercial",
-        "base_captain_density": 0.75,
-        "notes": "Dense South Asian expat area — high cash payment rate"
-    },
-    "Sharjah Border": {
-        "lat": 25.3463, "lon": 55.4213,
-        "demand_tier": "low",
-        "area_type": "border_transit",
-        "base_captain_density": 0.55,
-        "notes": "Inter-emirate transit zone — long trips, lower frequency"
-    },
+    "Downtown":      {"lat": 25.1972, "lon": 55.2744, "tier": "High",   "dmult": 1.25},
+    "Marina":        {"lat": 25.0805, "lon": 55.1403, "tier": "High",   "dmult": 1.20},
+    "JBR":           {"lat": 25.0774, "lon": 55.1302, "tier": "High",   "dmult": 1.15},
+    "DIFC":          {"lat": 25.2118, "lon": 55.2797, "tier": "High",   "dmult": 1.30},
+    "Deira":         {"lat": 25.2697, "lon": 55.3095, "tier": "Medium", "dmult": 1.05},
+    "Bur Dubai":     {"lat": 25.2532, "lon": 55.2956, "tier": "Medium", "dmult": 1.05},
+    "Jumeirah":      {"lat": 25.2048, "lon": 55.2434, "tier": "Medium", "dmult": 1.10},
+    "Al Quoz":       {"lat": 25.1521, "lon": 55.2270, "tier": "Low",    "dmult": 0.90},
+    "Business Bay":  {"lat": 25.1867, "lon": 55.2622, "tier": "High",   "dmult": 1.20},
+    "Dubai Hills":   {"lat": 25.1150, "lon": 55.2380, "tier": "Medium", "dmult": 1.00},
+    "DXB Airport":   {"lat": 25.2532, "lon": 55.3657, "tier": "High",   "dmult": 1.05},
+    "Sharjah":       {"lat": 25.3463, "lon": 55.4209, "tier": "Low",    "dmult": 0.95},
 }
-
 ZONE_NAMES = list(ZONES.keys())
+Z_LAT  = np.array([ZONES[z]["lat"]   for z in ZONE_NAMES])
+Z_LON  = np.array([ZONES[z]["lon"]   for z in ZONE_NAMES])
+Z_TIER = [ZONES[z]["tier"]  for z in ZONE_NAMES]
+Z_DM   = np.array([ZONES[z]["dmult"] for z in ZONE_NAMES])
 
-# Zone demand multipliers (relative to city average = 1.0)
-ZONE_DEMAND_MULT = {
-    "Downtown Dubai":    1.38,
-    "Business Bay":      1.15,
-    "DIFC":              1.10,
-    "Dubai Marina":      1.30,
-    "JBR":               1.22,
-    "Palm Jumeirah":     1.05,
-    "Jumeirah":          0.85,
-    "Deira":             1.20,
-    "Bur Dubai":         1.00,
-    "Dubai Airport (DXB)": 1.42,
-    "Al Quoz":           0.52,
-    "Dubai Hills":       0.75,
-    "Al Barsha":         0.90,
-    "Mirdif":            0.70,
-    "Karama":            0.96,
-    "Sharjah Border":    0.58,
+# ── 2. Zone-pair road distances (km) ────────────────────────────────────────
+DIST_MATRIX = {
+    ("Downtown",    "Marina"):       24.0,
+    ("Downtown",    "JBR"):          26.0,
+    ("Downtown",    "DIFC"):          2.5,
+    ("Downtown",    "Deira"):         8.0,
+    ("Downtown",    "Bur Dubai"):     5.0,
+    ("Downtown",    "Jumeirah"):      9.0,
+    ("Downtown",    "Al Quoz"):      10.0,
+    ("Downtown",    "Business Bay"):  3.5,
+    ("Downtown",    "Dubai Hills"):  18.0,
+    ("Downtown",    "DXB Airport"):  14.0,
+    ("Downtown",    "Sharjah"):      25.0,
+    ("Marina",      "JBR"):           2.5,
+    ("Marina",      "DIFC"):         22.0,
+    ("Marina",      "Deira"):        34.0,
+    ("Marina",      "Bur Dubai"):    30.0,
+    ("Marina",      "Jumeirah"):     17.0,
+    ("Marina",      "Al Quoz"):      15.0,
+    ("Marina",      "Business Bay"): 23.0,
+    ("Marina",      "Dubai Hills"):  18.0,
+    ("Marina",      "DXB Airport"):  38.0,
+    ("Marina",      "Sharjah"):      50.0,
+    ("JBR",         "DIFC"):         24.0,
+    ("JBR",         "Deira"):        36.0,
+    ("JBR",         "Bur Dubai"):    32.0,
+    ("JBR",         "Jumeirah"):     17.0,
+    ("JBR",         "Al Quoz"):      16.0,
+    ("JBR",         "Business Bay"): 25.0,
+    ("JBR",         "Dubai Hills"):  20.0,
+    ("JBR",         "DXB Airport"):  40.0,
+    ("JBR",         "Sharjah"):      52.0,
+    ("DIFC",        "Deira"):        10.0,
+    ("DIFC",        "Bur Dubai"):     6.0,
+    ("DIFC",        "Jumeirah"):     10.0,
+    ("DIFC",        "Al Quoz"):      10.0,
+    ("DIFC",        "Business Bay"):  2.5,
+    ("DIFC",        "Dubai Hills"):  16.0,
+    ("DIFC",        "DXB Airport"):  15.0,
+    ("DIFC",        "Sharjah"):      27.0,
+    ("Deira",       "Bur Dubai"):     4.5,
+    ("Deira",       "Jumeirah"):     16.0,
+    ("Deira",       "Al Quoz"):      20.0,
+    ("Deira",       "Business Bay"): 12.0,
+    ("Deira",       "Dubai Hills"):  28.0,
+    ("Deira",       "DXB Airport"):   7.0,
+    ("Deira",       "Sharjah"):      18.0,
+    ("Bur Dubai",   "Jumeirah"):     13.0,
+    ("Bur Dubai",   "Al Quoz"):      14.0,
+    ("Bur Dubai",   "Business Bay"):  7.0,
+    ("Bur Dubai",   "Dubai Hills"):  23.0,
+    ("Bur Dubai",   "DXB Airport"):  12.0,
+    ("Bur Dubai",   "Sharjah"):      23.0,
+    ("Jumeirah",    "Al Quoz"):       8.0,
+    ("Jumeirah",    "Business Bay"):  9.0,
+    ("Jumeirah",    "Dubai Hills"):  16.0,
+    ("Jumeirah",    "DXB Airport"):  22.0,
+    ("Jumeirah",    "Sharjah"):      37.0,
+    ("Al Quoz",     "Business Bay"):  9.0,
+    ("Al Quoz",     "Dubai Hills"):  12.0,
+    ("Al Quoz",     "DXB Airport"):  22.0,
+    ("Al Quoz",     "Sharjah"):      38.0,
+    ("Business Bay","Dubai Hills"):  14.0,
+    ("Business Bay","DXB Airport"):  16.0,
+    ("Business Bay","Sharjah"):      28.0,
+    ("Dubai Hills", "DXB Airport"):  28.0,
+    ("Dubai Hills", "Sharjah"):      42.0,
+    ("DXB Airport", "Sharjah"):      22.0,
 }
 
-# ═════════════════════════════════════════════════════════════════════════════
-# 2. CAREEM PRODUCTS — Dubai 2025 fare structure
-#    Calibrated to Careem's published rates and RTA metered taxi rates.
-# ═════════════════════════════════════════════════════════════════════════════
-PRODUCTS = {
-    "Careem Go": {
-        "base_fare": 5.00, "per_km": 1.49, "per_min": 0.25, "min_fare": 12.00,
-        "share": 0.44, "accepts_cash": True, "segment": "budget",
-        "notes": "Entry-level ride — highest volume product"
-    },
-    "Careem Go+": {
-        "base_fare": 6.00, "per_km": 1.75, "per_min": 0.30, "min_fare": 15.00,
-        "share": 0.22, "accepts_cash": True, "segment": "standard",
-        "notes": "Mid-tier comfort upgrade"
-    },
-    "Careem Business": {
-        "base_fare": 12.00, "per_km": 2.80, "per_min": 0.55, "min_fare": 28.00,
-        "share": 0.10, "accepts_cash": False, "segment": "premium",
-        "notes": "Corporate/premium — highest AED per ride, no cash"
-    },
-    "Hala Taxi": {
-        "base_fare": 12.00, "per_km": 1.97, "per_min": 0.37, "min_fare": 12.00,
-        "share": 0.16, "accepts_cash": True, "segment": "standard",
-        "notes": "RTA-licensed metered taxi via Careem app"
-    },
-    "Hala EV": {
-        "base_fare": 7.00, "per_km": 1.65, "per_min": 0.28, "min_fare": 14.00,
-        "share": 0.08, "accepts_cash": False, "segment": "eco",
-        "notes": "Electric vehicle option — growing fleet in 2025"
-    },
-}
-PRODUCT_NAMES = list(PRODUCTS.keys())
-PRODUCT_SHARES = [PRODUCTS[p]["share"] for p in PRODUCT_NAMES]
-
-# ═════════════════════════════════════════════════════════════════════════════
-# 3. DUBAI EVENTS CALENDAR 2025
-#    Source: Dubai Tourism, GITEX, Dubai Events official calendars
-# ═════════════════════════════════════════════════════════════════════════════
-EVENTS_2025 = [
-    {
-        "name": "Dubai Shopping Festival (DSF)",
-        "start": date(2025, 1, 16), "end": date(2025, 2, 16),
-        "venue_zones": ["Downtown Dubai", "Deira", "Dubai Marina", "Al Barsha"],
-        "demand_multiplier": 1.35, "type": "shopping_festival",
-        "notes": "City-wide retail festival, heavy footfall in malls and souks"
-    },
-    {
-        "name": "Dubai Food Festival",
-        "start": date(2025, 2, 21), "end": date(2025, 3, 8),
-        "venue_zones": ["JBR", "Dubai Marina", "DIFC", "Business Bay"],
-        "demand_multiplier": 1.20, "type": "food_festival",
-        "notes": "Restaurant and beach pop-up events"
-    },
-    {
-        "name": "Ramadan",
-        "start": date(2025, 3, 1), "end": date(2025, 3, 29),
-        "venue_zones": [],  # city-wide cultural shift
-        "demand_multiplier": 0.85, "type": "religious",
-        "notes": "Daytime demand drops; Iftar surge 17:30-19:00; Suhoor 01:00-03:00"
-    },
-    {
-        "name": "Eid Al Fitr",
-        "start": date(2025, 3, 30), "end": date(2025, 4, 2),
-        "venue_zones": ["Downtown Dubai", "Dubai Marina", "JBR", "Deira", "Bur Dubai"],
-        "demand_multiplier": 1.55, "type": "public_holiday",
-        "notes": "Major holiday — family outings, mall visits, airport travel"
-    },
-    {
-        "name": "Eid Al Adha",
-        "start": date(2025, 6, 6), "end": date(2025, 6, 9),
-        "venue_zones": ["Deira", "Bur Dubai", "Karama", "Downtown Dubai"],
-        "demand_multiplier": 1.42, "type": "public_holiday",
-        "notes": "Second major holiday — family gatherings and travel"
-    },
-    {
-        "name": "Dubai Summer Surprises",
-        "start": date(2025, 7, 1), "end": date(2025, 9, 6),
-        "venue_zones": ["Downtown Dubai", "Al Barsha", "Deira"],
-        "demand_multiplier": 0.82, "type": "summer_festival",
-        "notes": "Indoor mall-based events; heat reduces overall outdoor mobility"
-    },
-    {
-        "name": "GITEX Global",
-        "start": date(2025, 10, 13), "end": date(2025, 10, 17),
-        "venue_zones": ["DIFC", "Business Bay", "Bur Dubai", "Dubai Airport (DXB)"],
-        "demand_multiplier": 1.62, "type": "tech_conference",
-        "notes": "World's largest tech show — 100,000+ visitors, massive corporate demand"
-    },
-    {
-        "name": "Dubai Airshow",
-        "start": date(2025, 11, 17), "end": date(2025, 11, 21),
-        "venue_zones": ["Dubai Airport (DXB)", "Business Bay", "DIFC"],
-        "demand_multiplier": 1.45, "type": "exhibition",
-        "notes": "International aerospace show — business travel surge"
-    },
-    {
-        "name": "UAE National Day",
-        "start": date(2025, 12, 1), "end": date(2025, 12, 3),
-        "venue_zones": ["Downtown Dubai", "Dubai Marina", "JBR", "Jumeirah"],
-        "demand_multiplier": 1.72, "type": "national_holiday",
-        "notes": "Largest national celebration — fireworks, corniche events, high traffic"
-    },
-    {
-        "name": "New Year's Eve",
-        "start": date(2025, 12, 31), "end": date(2025, 12, 31),
-        "venue_zones": ["Downtown Dubai", "Palm Jumeirah", "Dubai Marina", "JBR"],
-        "demand_multiplier": 2.25, "type": "celebration",
-        "notes": "Burj Khalifa fireworks — single highest-surge night of the year"
-    },
-]
-
-# UAE Public Holidays 2025 (official)
-UAE_HOLIDAYS = {
-    date(2025, 1, 1),   # New Year's Day
-    date(2025, 3, 30),  # Eid Al Fitr — Day 1
-    date(2025, 3, 31),  # Eid Al Fitr — Day 2
-    date(2025, 4, 1),   # Eid Al Fitr — Day 3
-    date(2025, 6, 6),   # Eid Al Adha — Day 1
-    date(2025, 6, 7),   # Eid Al Adha — Day 2
-    date(2025, 6, 8),   # Eid Al Adha — Day 3
-    date(2025, 6, 9),   # Eid Al Adha — Day 4
-    date(2025, 6, 27),  # Islamic New Year
-    date(2025, 9, 5),   # Prophet's Birthday
-    date(2025, 12, 1),  # Commemoration Day
-    date(2025, 12, 2),  # UAE National Day
-    date(2025, 12, 3),  # UAE National Day holiday
-}
-
-RAMADAN_DATES = (date(2025, 3, 1), date(2025, 3, 29))
-
-# ═════════════════════════════════════════════════════════════════════════════
-# 4. DUBAI WEATHER PROFILES (monthly)
-#    Source: UAE Meteorological Authority historical averages
-# ═════════════════════════════════════════════════════════════════════════════
-WEATHER_BY_MONTH = {
-    1:  {"temp_mu": 22, "temp_sd": 3.0, "hum_mu": 65, "rain_p": 0.050, "storm_p": 0.018},
-    2:  {"temp_mu": 24, "temp_sd": 3.0, "hum_mu": 63, "rain_p": 0.040, "storm_p": 0.020},
-    3:  {"temp_mu": 28, "temp_sd": 3.0, "hum_mu": 60, "rain_p": 0.035, "storm_p": 0.025},
-    4:  {"temp_mu": 34, "temp_sd": 3.0, "hum_mu": 55, "rain_p": 0.010, "storm_p": 0.035},
-    5:  {"temp_mu": 39, "temp_sd": 2.5, "hum_mu": 50, "rain_p": 0.002, "storm_p": 0.050},
-    6:  {"temp_mu": 42, "temp_sd": 2.0, "hum_mu": 60, "rain_p": 0.000, "storm_p": 0.060},
-    7:  {"temp_mu": 43, "temp_sd": 1.8, "hum_mu": 65, "rain_p": 0.000, "storm_p": 0.045},
-    8:  {"temp_mu": 44, "temp_sd": 1.8, "hum_mu": 70, "rain_p": 0.000, "storm_p": 0.038},
-    9:  {"temp_mu": 41, "temp_sd": 2.0, "hum_mu": 68, "rain_p": 0.008, "storm_p": 0.030},
-    10: {"temp_mu": 36, "temp_sd": 2.5, "hum_mu": 60, "rain_p": 0.028, "storm_p": 0.025},
-    11: {"temp_mu": 30, "temp_sd": 3.0, "hum_mu": 60, "rain_p": 0.040, "storm_p": 0.020},
-    12: {"temp_mu": 24, "temp_sd": 3.0, "hum_mu": 62, "rain_p": 0.048, "storm_p": 0.018},
-}
-
-# ═════════════════════════════════════════════════════════════════════════════
-# 5. HOURLY DEMAND PROFILES
-#    Weights represent relative ride volume at each hour (normalized to peak=1.0)
-# ═════════════════════════════════════════════════════════════════════════════
-# UAE: weekend = Friday + Saturday
-DEMAND_WEEKDAY = {
-    0: 0.28,  1: 0.38,  2: 0.42,  3: 0.22,  4: 0.14,  5: 0.22,
-    6: 0.48,  7: 0.92,  8: 1.00,  9: 0.86, 10: 0.60, 11: 0.55,
-   12: 0.72, 13: 0.78, 14: 0.52, 15: 0.45, 16: 0.72, 17: 0.96,
-   18: 1.00, 19: 0.92, 20: 0.82, 21: 0.76, 22: 0.65, 23: 0.50,
-}
-DEMAND_WEEKEND = {
-    0: 0.62,  1: 0.72,  2: 0.65,  3: 0.42,  4: 0.20,  5: 0.15,
-    6: 0.25,  7: 0.38,  8: 0.50,  9: 0.60, 10: 0.75, 11: 0.82,
-   12: 0.88, 13: 0.82, 14: 0.72, 15: 0.68, 16: 0.78, 17: 0.88,
-   18: 0.96, 19: 1.00, 20: 0.96, 21: 0.92, 22: 0.88, 23: 0.78,
-}
-# Ramadan: daytime suppressed; pre-Iftar (17:00) spikes; Suhoor (01-03) rises
-DEMAND_RAMADAN = {
-    0: 0.52,  1: 0.65,  2: 0.55,  3: 0.28,  4: 0.48,  5: 0.32,
-    6: 0.22,  7: 0.42,  8: 0.55,  9: 0.50, 10: 0.40, 11: 0.35,
-   12: 0.28, 13: 0.25, 14: 0.20, 15: 0.22, 16: 0.38, 17: 1.00,
-   18: 0.92, 19: 0.72, 20: 0.68, 21: 0.72, 22: 0.68, 23: 0.62,
-}
-
-# ═════════════════════════════════════════════════════════════════════════════
-# 6. ROAD DISTANCE MATRIX (km, calibrated to Google Maps road routing)
-#    Source: manually verified against Google Maps, January 2025
-# ═════════════════════════════════════════════════════════════════════════════
-_KNOWN = {
-    ("Downtown Dubai",      "Business Bay"):             3.5,
-    ("Downtown Dubai",      "DIFC"):                     2.8,
-    ("Downtown Dubai",      "Jumeirah"):                  8.5,
-    ("Downtown Dubai",      "Bur Dubai"):                 5.5,
-    ("Downtown Dubai",      "Deira"):                    10.5,
-    ("Downtown Dubai",      "Dubai Airport (DXB)"):      17.0,
-    ("Downtown Dubai",      "Dubai Marina"):             32.0,
-    ("Downtown Dubai",      "JBR"):                      33.5,
-    ("Downtown Dubai",      "Palm Jumeirah"):             29.0,
-    ("Downtown Dubai",      "Al Quoz"):                  10.0,
-    ("Downtown Dubai",      "Dubai Hills"):              19.5,
-    ("Downtown Dubai",      "Al Barsha"):                23.0,
-    ("Downtown Dubai",      "Mirdif"):                   22.5,
-    ("Downtown Dubai",      "Karama"):                    7.0,
-    ("Downtown Dubai",      "Sharjah Border"):           31.0,
-    ("Business Bay",        "DIFC"):                      2.5,
-    ("Business Bay",        "Jumeirah"):                  9.0,
-    ("Business Bay",        "Bur Dubai"):                 6.0,
-    ("Business Bay",        "Deira"):                    13.0,
-    ("Business Bay",        "Dubai Airport (DXB)"):      18.5,
-    ("Business Bay",        "Dubai Marina"):             29.0,
-    ("Business Bay",        "JBR"):                      30.5,
-    ("Business Bay",        "Palm Jumeirah"):             28.0,
-    ("Business Bay",        "Al Quoz"):                   8.0,
-    ("Business Bay",        "Dubai Hills"):              17.0,
-    ("Business Bay",        "Al Barsha"):                21.0,
-    ("Business Bay",        "Karama"):                    5.5,
-    ("Business Bay",        "Mirdif"):                   22.0,
-    ("DIFC",                "Jumeirah"):                  9.0,
-    ("DIFC",                "Bur Dubai"):                 7.0,
-    ("DIFC",                "Deira"):                    14.5,
-    ("DIFC",                "Dubai Airport (DXB)"):      16.5,
-    ("DIFC",                "Dubai Marina"):             31.0,
-    ("DIFC",                "JBR"):                      32.0,
-    ("DIFC",                "Al Quoz"):                   9.0,
-    ("Dubai Marina",        "JBR"):                       2.5,
-    ("Dubai Marina",        "Palm Jumeirah"):              8.5,
-    ("Dubai Marina",        "Al Barsha"):                10.5,
-    ("Dubai Marina",        "Dubai Hills"):              13.5,
-    ("Dubai Marina",        "Al Quoz"):                  20.0,
-    ("Dubai Marina",        "Jumeirah"):                 18.5,
-    ("Dubai Marina",        "Bur Dubai"):                36.0,
-    ("Dubai Marina",        "Deira"):                    48.0,
-    ("Dubai Marina",        "Dubai Airport (DXB)"):      46.5,
-    ("Dubai Marina",        "Karama"):                   33.0,
-    ("Dubai Marina",        "Mirdif"):                   52.0,
-    ("Dubai Marina",        "Sharjah Border"):           58.0,
-    ("JBR",                 "Palm Jumeirah"):              7.0,
-    ("JBR",                 "Al Barsha"):                12.0,
-    ("JBR",                 "Dubai Hills"):              15.0,
-    ("Palm Jumeirah",       "Jumeirah"):                 12.0,
-    ("Palm Jumeirah",       "Al Barsha"):                14.5,
-    ("Palm Jumeirah",       "Downtown Dubai"):           29.0,
-    ("Deira",               "Bur Dubai"):                 7.5,
-    ("Deira",               "Dubai Airport (DXB)"):       6.5,
-    ("Deira",               "Mirdif"):                   16.5,
-    ("Deira",               "Karama"):                    9.0,
-    ("Deira",               "Sharjah Border"):           13.0,
-    ("Bur Dubai",           "Karama"):                    3.5,
-    ("Bur Dubai",           "Dubai Airport (DXB)"):      12.5,
-    ("Bur Dubai",           "Mirdif"):                   19.5,
-    ("Dubai Airport (DXB)", "Mirdif"):                    9.0,
-    ("Dubai Airport (DXB)", "Karama"):                   13.0,
-    ("Dubai Airport (DXB)", "Sharjah Border"):           16.5,
-    ("Dubai Airport (DXB)", "Deira"):                     6.5,
-    ("Al Quoz",             "Al Barsha"):                 7.5,
-    ("Al Quoz",             "Dubai Hills"):               9.0,
-    ("Al Quoz",             "Jumeirah"):                  9.5,
-    ("Al Barsha",           "Dubai Hills"):               6.0,
-    ("Al Barsha",           "Jumeirah"):                 11.0,
-    ("Mirdif",              "Sharjah Border"):           10.5,
-    ("Karama",              "Bur Dubai"):                 3.5,
-}
-
-
-def _haversine(lat1, lon1, lat2, lon2):
-    R = 6371.0
-    phi1, phi2 = np.radians(lat1), np.radians(lat2)
-    a = (np.sin((phi2 - phi1) / 2) ** 2
-         + np.cos(phi1) * np.cos(phi2) * np.sin((np.radians(lon2 - lon1)) / 2) ** 2)
-    return 2 * R * np.arcsin(np.sqrt(a))
-
-
-def road_distance(zone_a: str, zone_b: str) -> float:
-    """Return road distance in km between two zones."""
-    if zone_a == zone_b:
-        return round(np.random.uniform(1.2, 4.8), 2)
-    for key in [(zone_a, zone_b), (zone_b, zone_a)]:
-        if key in _KNOWN:
-            base = _KNOWN[key]
-            # Add realistic route variation ±8%
-            return round(base * np.random.uniform(0.93, 1.08), 2)
-    # Fallback: haversine × road detour factor (Dubai avg ~1.42)
-    sl = _haversine(ZONES[zone_a]["lat"], ZONES[zone_a]["lon"],
-                    ZONES[zone_b]["lat"], ZONES[zone_b]["lon"])
-    return round(sl * np.random.uniform(1.35, 1.52), 2)
-
-
-# Pre-compute distance lookup matrix for dropoff zone sampling
-def _build_dist_matrix():
-    n = len(ZONE_NAMES)
-    mat = np.zeros((n, n))
-    for i, za in enumerate(ZONE_NAMES):
-        for j, zb in enumerate(ZONE_NAMES):
-            if i == j:
-                mat[i, j] = 3.0
-            else:
-                k1, k2 = (za, zb), (zb, za)
-                if k1 in _KNOWN:
-                    mat[i, j] = _KNOWN[k1]
-                elif k2 in _KNOWN:
-                    mat[i, j] = _KNOWN[k2]
-                else:
-                    mat[i, j] = _haversine(
-                        ZONES[za]["lat"], ZONES[za]["lon"],
-                        ZONES[zb]["lat"], ZONES[zb]["lon"]
-                    ) * 1.42
-    return mat
-
-DIST_MATRIX = _build_dist_matrix()
-ZONE_IDX = {z: i for i, z in enumerate(ZONE_NAMES)}
-
-# ═════════════════════════════════════════════════════════════════════════════
-# 7. HELPER FUNCTIONS
-# ═════════════════════════════════════════════════════════════════════════════
-
-def get_weather(month: int) -> dict:
-    w = WEATHER_BY_MONTH[month]
-    temp = float(np.clip(np.random.normal(w["temp_mu"], w["temp_sd"]), 14, 48))
-    hum  = float(np.clip(np.random.normal(w["hum_mu"], 8), 25, 95))
-    rain  = bool(np.random.random() < w["rain_p"])
-    storm = bool(np.random.random() < w["storm_p"]) if not rain else False
-    factor = 1.0
-    if rain:
-        factor = float(np.random.uniform(1.32, 1.85))   # Rain = massive Dubai demand spike
-    elif storm:
-        factor = float(np.random.uniform(1.12, 1.42))
-    elif temp > 41:
-        factor = float(np.random.uniform(1.05, 1.22))   # Extreme heat → more rides
-    return {
-        "temperature_c":      round(temp, 1),
-        "humidity_pct":       round(hum, 1),
-        "is_rain":            rain,
-        "is_sandstorm":       storm,
-        "weather_demand_factor": round(factor, 3),
-    }
-
-
-def get_event_context(d: date, pickup_zone: str):
-    """Return (event_name, event_type, zone_demand_mult) for a given date/zone."""
-    active = [e for e in EVENTS_2025 if e["start"] <= d <= e["end"]]
-    if not active:
-        return "None", "None", 1.0
-    best = max(active, key=lambda e: e["demand_multiplier"])
-    if pickup_zone in best["venue_zones"]:
-        mult = best["demand_multiplier"]
-    else:
-        # Partial city-wide lift
-        mult = 1.0 + (best["demand_multiplier"] - 1.0) * 0.28
-    return best["name"], best["type"], round(mult, 3)
-
-
-def calc_surge(hour, is_weekend, is_ramadan, is_holiday,
-               event_mult, weather_factor, zone_mult, captain_avail) -> float:
-    """
-    Compute surge multiplier [1.0, 2.5].
-    Demand-supply gap drives surge; multiple real-world factors compound.
-    """
-    if is_ramadan:
-        hw = DEMAND_RAMADAN[hour]
-    elif is_weekend:
-        hw = DEMAND_WEEKEND[hour]
-    else:
-        hw = DEMAND_WEEKDAY[hour]
-
-    demand = hw * zone_mult * event_mult * weather_factor
-    if is_holiday:
-        demand *= 1.30
-
-    # Supply tightness
-    supply_tightness = 1.0 - captain_avail * 0.45
-
-    # Imbalance → surge
-    imbalance = max(0.0, demand / 0.72 - 1.0) + supply_tightness * 0.28
-    surge = 1.0 + imbalance * 0.46
-
-    # Ramadan pre-Iftar spike (17:00–18:00 is sharpest)
-    if is_ramadan and hour in [17, 18]:
-        surge *= np.random.uniform(1.18, 1.35)
-
-    # New Year's Eve extra spike (23:00–01:00)
-    if hour in [23, 0] and not is_ramadan:
-        pass  # handled via event_mult already
-
-    surge += np.random.normal(0, 0.04)
-    return float(np.clip(round(surge, 3), 1.0, 2.50))
-
-
-def calc_price(product: str, dist_km: float, dur_min: float, surge: float):
-    """Returns (final_price_aed, metered_fare_aed)."""
-    p = PRODUCTS[product]
-    fare = p["base_fare"] + p["per_km"] * dist_km + p["per_min"] * dur_min
-    fare = max(fare, p["min_fare"])
-    final = round(fare * surge, 2)
-    return final, round(fare, 2)
-
-
-def sim_outcome(surge, wait_min, payment, dist_km, is_rain, hour, zone) -> str:
-    """Simulate booking outcome based on operational factors."""
-    p = 0.89  # Dubai baseline completion (highest-performing Careem market)
-    if surge > 1.90:     p -= 0.10
-    elif surge > 1.60:   p -= 0.05
-    elif surge > 1.40:   p -= 0.02
-    if payment == "Cash" and dist_km < 4.5:  p -= 0.14
-    if payment == "Cash" and dist_km < 3.0:  p -= 0.08  # stacks
-    if dist_km < 2.5:    p -= 0.06
-    if wait_min > 9:     p -= 0.08
-    if wait_min > 12:    p -= 0.06  # stacks
-    if is_rain:          p -= 0.11
-    if hour in [2, 3, 4]: p -= 0.06
-    if zone == "Al Quoz": p -= 0.10
-    if zone == "Sharjah Border": p -= 0.06
-    p = float(np.clip(p, 0.52, 0.96))
-    if np.random.random() < p:
-        return "Completed"
-    # Distribute failure modes contextually
-    r = np.random.random()
-    if payment == "Cash" and dist_km < 4.5:
-        cuts = [0.55, 0.80]
-        cats = ["Captain Cancelled", "No Captain Found", "Customer Cancelled"]
-    elif wait_min > 9:
-        cuts = [0.45, 0.72]
-        cats = ["Customer Cancelled", "Captain Cancelled", "No Captain Found"]
-    elif is_rain:
-        cuts = [0.50, 0.75]
-        cats = ["No Captain Found", "Captain Cancelled", "Customer Cancelled"]
-    else:
-        cuts = [0.40, 0.70]
-        cats = ["Captain Cancelled", "No Captain Found", "Customer Cancelled"]
-    if r < cuts[0]:  return cats[0]
-    if r < cuts[1]:  return cats[1]
-    return cats[2]
-
-
-def cancel_reason(outcome, dist_km, payment, wait_min, surge) -> str:
-    if outcome == "Completed":
-        return "N/A"
-    if outcome == "No Captain Found":
-        return "No Captain Available"
-    if outcome == "Customer Cancelled":
-        if wait_min > 9:   return "Wait Time Too Long"
-        if surge > 1.75:   return "Price Too High"
-        return str(np.random.choice(
-            ["Changed Plans", "Wait Time Too Long", "Found Alternative", "Price Too High"],
-            p=[0.30, 0.35, 0.25, 0.10]))
-    if outcome == "Captain Cancelled":
-        if payment == "Cash" and dist_km < 4.5:
-            return "Cash Trip – Short Distance"
-        return str(np.random.choice(
-            ["Ride Too Short / Uneconomical", "Wrong Pickup Location",
-             "Cash Payment Refused", "Customer Unresponsive", "Personal Reason"],
-            p=[0.34, 0.25, 0.20, 0.13, 0.08]))
-    return "Unknown"
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# 8. MAIN DATASET GENERATION
-# ═════════════════════════════════════════════════════════════════════════════
-
-def generate(target: int = 160_000, out: str = "data/processed/dubai_rides_2025.csv"):
-    t0 = time.time()
-    print("=" * 65)
-    print("  XPrice — Dubai Ride Dataset Generator")
-    print(f"  Target: {target:,} records | Year: 2025 | City: Dubai, UAE")
-    print("=" * 65)
-
-    all_dates = [date(2025, 1, 1) + timedelta(days=i) for i in range(365)]
-    base_per_day = target // 365
-    rows = []
-    ride_id = 1
-
-    # Pre-compute zone demand weight array
-    zdw = np.array([ZONE_DEMAND_MULT[z] for z in ZONE_NAMES], dtype=float)
-    zdw /= zdw.sum()
-
-    for d in all_dates:
-        is_weekend  = d.weekday() in (4, 5)   # Fri = 4, Sat = 5 in UAE
-        is_holiday  = d in UAE_HOLIDAYS
-        is_ramadan  = RAMADAN_DATES[0] <= d <= RAMADAN_DATES[1]
-        month       = d.month
-
-        # Daily weather (constant for all rides that day)
-        wx = get_weather(month)
-
-        # City-level event context for volume calculation
-        ev_name_city, ev_type_city, ev_mult_city = get_event_context(d, "Downtown Dubai")
-
-        # Adjust daily ride volume
-        vol = base_per_day
-        if is_holiday:    vol = int(vol * 1.42)
-        if is_weekend:    vol = int(vol * 1.14)
-        if ev_name_city != "None" and ev_type_city != "religious":
-            vol = int(vol * min(ev_mult_city, 1.55))
-        if ev_name_city == "Ramadan":    vol = int(vol * 0.88)
-        if wx["is_rain"]:                vol = int(vol * 1.28)
-        if month in (7, 8):              vol = int(vol * 0.82)   # Summer drop
-        vol = max(180, min(vol, 1600))
-
-        # Hourly demand pool for the day
-        if is_ramadan:
-            hd = DEMAND_RAMADAN
-        elif is_weekend:
-            hd = DEMAND_WEEKEND
+def get_dist_arr(pu_arr, do_arr):
+    out = np.zeros(len(pu_arr))
+    for i in range(len(pu_arr)):
+        a, b = pu_arr[i], do_arr[i]
+        if a == b:
+            out[i] = np.random.uniform(1.5, 4.5)
         else:
-            hd = DEMAND_WEEKDAY
-        h_pool = []
-        for hh, ww in hd.items():
-            h_pool.extend([hh] * max(1, int(ww * 100)))
+            key = (a, b) if (a, b) in DIST_MATRIX else (b, a)
+            base = DIST_MATRIX.get(key, 15.0)
+            out[i] = base * np.random.uniform(0.90, 1.10)
+    return out
 
-        sampled_hours    = np.random.choice(h_pool, size=vol)
-        pickup_zones_arr = np.random.choice(ZONE_NAMES, size=vol, p=zdw)
-        products_arr     = np.random.choice(PRODUCT_NAMES, size=vol, p=PRODUCT_SHARES)
+# ── 3. Salik gates per zone pair ────────────────────────────────────────────
+SALIK = {
+    ("Marina",      "Downtown"):    2, ("Marina",      "DIFC"):        2,
+    ("Marina",      "Business Bay"):2, ("Marina",      "Deira"):       3,
+    ("Marina",      "Bur Dubai"):   2, ("Marina",      "DXB Airport"): 3,
+    ("Marina",      "Sharjah"):     3, ("JBR",         "Downtown"):    2,
+    ("JBR",         "DIFC"):        2, ("JBR",         "Business Bay"):2,
+    ("JBR",         "Deira"):       3, ("JBR",         "DXB Airport"): 3,
+    ("JBR",         "Sharjah"):     3, ("Al Quoz",     "Deira"):       2,
+    ("Al Quoz",     "DXB Airport"): 2, ("Al Quoz",     "Sharjah"):     2,
+    ("Dubai Hills", "Deira"):       2, ("Dubai Hills", "DXB Airport"): 2,
+    ("Dubai Hills", "Sharjah"):     3, ("DIFC",        "DXB Airport"): 1,
+    ("DIFC",        "Sharjah"):     2, ("Downtown",    "DXB Airport"): 1,
+    ("Downtown",    "Sharjah"):     2, ("Deira",       "Marina"):      3,
+    ("Deira",       "JBR"):         3, ("Bur Dubai",   "Marina"):      2,
+    ("Bur Dubai",   "JBR"):         2, ("DXB Airport", "Marina"):      3,
+    ("DXB Airport", "JBR"):         3, ("DXB Airport", "Dubai Hills"): 2,
+    ("Sharjah",     "Marina"):      3, ("Sharjah",     "JBR"):         3,
+    ("Sharjah",     "Dubai Hills"): 3,
+}
+def get_salik_arr(pu_arr, do_arr):
+    out = np.zeros(len(pu_arr), dtype=int)
+    for i in range(len(pu_arr)):
+        a, b = pu_arr[i], do_arr[i]
+        out[i] = SALIK.get((a, b), SALIK.get((b, a), 0))
+    return out
 
-        for i in range(vol):
-            hour        = int(sampled_hours[i])
-            minute      = int(np.random.randint(0, 60))
-            second      = int(np.random.randint(0, 60))
-            ts          = datetime(d.year, d.month, d.day, hour, minute, second)
-            pickup_zone = pickup_zones_arr[i]
-            product     = products_arr[i]
+# ── 4. Events calendar 2025 ─────────────────────────────────────────────────
+EVENTS = [
+    {"name": "Dubai Shopping Festival", "type": "Shopping Festival",
+     "start": "2025-01-03", "end": "2025-02-01", "dmult": 1.35},
+    {"name": "Dubai Food Festival",     "type": "Food Festival",
+     "start": "2025-02-20", "end": "2025-03-08", "dmult": 1.20},
+    {"name": "Art Dubai",               "type": "Art/Culture",
+     "start": "2025-03-18", "end": "2025-03-23", "dmult": 1.25},
+    {"name": "Dubai World Cup",         "type": "Sports Event",
+     "start": "2025-03-29", "end": "2025-03-29", "dmult": 1.55},
+    {"name": "Eid Al Fitr",             "type": "Religious Holiday",
+     "start": "2025-03-30", "end": "2025-04-02", "dmult": 1.30},
+    {"name": "Formula 1 Weekend",       "type": "Sports Event",
+     "start": "2025-04-04", "end": "2025-04-06", "dmult": 1.50},
+    {"name": "Eid Al Adha",             "type": "Religious Holiday",
+     "start": "2025-06-05", "end": "2025-06-09", "dmult": 1.25},
+    {"name": "GITEX Global",            "type": "Tech Conference",
+     "start": "2025-10-13", "end": "2025-10-17", "dmult": 1.45},
+    {"name": "Diwali",                  "type": "Cultural Event",
+     "start": "2025-10-20", "end": "2025-10-21", "dmult": 1.20},
+    {"name": "Dubai Airshow",           "type": "Trade Show",
+     "start": "2025-11-17", "end": "2025-11-21", "dmult": 1.40},
+    {"name": "UAE National Day",        "type": "National Holiday",
+     "start": "2025-12-02", "end": "2025-12-03", "dmult": 1.35},
+    {"name": "NYE Burj Khalifa",        "type": "New Year Event",
+     "start": "2025-12-31", "end": "2025-12-31", "dmult": 2.20},
+]
+RAMADAN_START = pd.Timestamp("2025-03-01")
+RAMADAN_END   = pd.Timestamp("2025-03-29")
+UAE_HOLIDAYS = {
+    "2025-01-01","2025-03-30","2025-03-31","2025-04-01","2025-04-02","2025-04-03",
+    "2025-06-05","2025-06-06","2025-06-07","2025-06-08","2025-06-09",
+    "2025-06-26","2025-09-04","2025-12-02","2025-12-03",
+}
 
-            # ── Dropoff zone ─────────────────────────────────────────────
-            pu_idx = ZONE_IDX[pickup_zone]
-            dists  = DIST_MATRIX[pu_idx].copy()
-            # Distance-decay × destination demand
-            dz_demand = np.array([ZONE_DEMAND_MULT[z] for z in ZONE_NAMES])
-            drop_probs = dz_demand / (dists + 1.5)
-            drop_probs[pu_idx] *= 0.25   # Suppress intra-zone (still possible)
-            drop_probs /= drop_probs.sum()
-            dropoff_zone = str(np.random.choice(ZONE_NAMES, p=drop_probs))
+# ── 5. Products ─────────────────────────────────────────────────────────────
+# Columns: base_day, base_night, per_km, per_min, min_fare,
+#          book_peak, book_offpeak, book_night, is_hala(0/1), sh_reg, sh_apt
+PROD_DEF = {
+    "Comfort":      (5.00, 5.50, 2.50, 0.40, 15, 5.00, 3.00, 2.50, 0, 0.18, 0.05),
+    "Executive":    (5.00, 5.50, 3.20, 0.55, 18, 6.00, 4.00, 3.50, 0, 0.10, 0.08),
+    "Hala Taxi":    (5.00, 5.50, 2.20, 0.50, 13, 7.50, 4.00, 4.00, 1, 0.30, 0.25),
+    "Eco Friendly": (5.00, 5.50, 2.60, 0.42, 15, 5.00, 3.50, 3.00, 0, 0.08, 0.04),
+    "Electric":     (5.00, 5.50, 2.80, 0.45, 16, 5.50, 4.00, 3.50, 0, 0.05, 0.03),
+    "Kids":         (5.00, 5.50, 2.80, 0.45, 18, 6.00, 4.50, 3.50, 0, 0.04, 0.02),
+    "Hala Kids":    (5.00, 5.50, 2.30, 0.50, 15, 7.50, 4.50, 4.00, 1, 0.03, 0.03),
+    "Premier":      (5.00, 5.50, 4.50, 0.80, 30, 8.00, 6.00, 5.00, 0, 0.04, 0.08),
+    "MAX":          (5.00, 5.50, 3.80, 0.65, 25, 7.00, 5.00, 4.50, 0, 0.05, 0.22),
+    "Hala MAX":     (5.00, 5.50, 2.80, 0.60, 20, 8.00, 5.50, 5.00, 1, 0.13, 0.20),
+}
+PROD_NAMES = list(PROD_DEF.keys())
+PD = np.array([list(v) for v in PROD_DEF.values()])   # shape (10, 11)
+I_BDAY, I_BNGT, I_PKM, I_PMIN, I_MINF = 0, 1, 2, 3, 4
+I_BKPK, I_BKOF, I_BKNT, I_HALA        = 5, 6, 7, 8
+I_SHREG, I_SHAPT                        = 9, 10
+SH_REG = PD[:, I_SHREG] / PD[:, I_SHREG].sum()
+SH_APT = PD[:, I_SHAPT] / PD[:, I_SHAPT].sum()
 
-            # ── Distance & duration ───────────────────────────────────────
-            dist_km  = road_distance(pickup_zone, dropoff_zone)
-            is_peak  = hour in (7, 8, 9, 17, 18, 19, 20)
-            is_night = hour in (0, 1, 2, 3, 4, 5)
-            if is_peak:
-                speed = float(np.random.uniform(20, 36))
-            elif is_night:
-                speed = float(np.random.uniform(55, 82))
-            else:
-                speed = float(np.random.uniform(36, 60))
-            dur_min = max(4.0, round((dist_km / speed) * 60, 1))
+# ── 6. Demand profiles ──────────────────────────────────────────────────────
+H_REG = np.array([
+    0.30, 0.18, 0.12, 0.10, 0.12, 0.22,
+    0.55, 0.90, 1.00, 0.85, 0.68, 0.62,
+    0.65, 0.63, 0.68, 0.72, 0.90, 0.95,
+    1.00, 0.92, 0.82, 0.72, 0.60, 0.45,
+])
+H_RAM = np.array([
+    0.65, 0.60, 0.55, 0.40, 0.20, 0.15,
+    0.18, 0.22, 0.25, 0.25, 0.25, 0.25,
+    0.28, 0.28, 0.30, 0.35, 0.50, 1.00,
+    0.95, 0.85, 0.80, 0.78, 0.80, 0.78,
+])
+H_REG /= H_REG.sum(); H_RAM /= H_RAM.sum()
 
-            # ── Zone-specific event context ───────────────────────────────
-            ev_name, ev_type, ev_mult = get_event_context(d, pickup_zone)
+MONTH_VOL = np.array([1.10, 1.05, 1.00, 0.90, 0.82, 0.72,
+                       0.70, 0.72, 0.85, 1.00, 1.10, 1.12])
 
-            # ── Captain availability ──────────────────────────────────────
-            cap_avail = ZONES[pickup_zone]["base_captain_density"]
-            if is_peak:              cap_avail *= float(np.random.uniform(0.52, 0.80))
-            if wx["is_rain"]:        cap_avail *= float(np.random.uniform(0.48, 0.70))
-            if wx["is_sandstorm"]:   cap_avail *= float(np.random.uniform(0.65, 0.82))
-            if is_ramadan and hour in (17, 18):
-                cap_avail *= float(np.random.uniform(0.42, 0.65))
-            cap_avail = float(round(np.clip(cap_avail, 0.18, 1.0), 3))
+# ── 7. Weather by month ─────────────────────────────────────────────────────
+WEATHER = {
+    1:  {"temp":(20,25),"hum":(60,75),"rain_p":0.045,"storm_p":0.010},
+    2:  {"temp":(21,27),"hum":(55,72),"rain_p":0.035,"storm_p":0.008},
+    3:  {"temp":(24,31),"hum":(50,68),"rain_p":0.030,"storm_p":0.012},
+    4:  {"temp":(28,35),"hum":(40,60),"rain_p":0.020,"storm_p":0.018},
+    5:  {"temp":(33,39),"hum":(40,58),"rain_p":0.005,"storm_p":0.020},
+    6:  {"temp":(35,42),"hum":(50,70),"rain_p":0.002,"storm_p":0.025},
+    7:  {"temp":(36,43),"hum":(55,78),"rain_p":0.002,"storm_p":0.020},
+    8:  {"temp":(36,42),"hum":(55,80),"rain_p":0.002,"storm_p":0.015},
+    9:  {"temp":(32,38),"hum":(55,75),"rain_p":0.005,"storm_p":0.012},
+    10: {"temp":(28,34),"hum":(50,68),"rain_p":0.015,"storm_p":0.010},
+    11: {"temp":(23,30),"hum":(55,72),"rain_p":0.030,"storm_p":0.008},
+    12: {"temp":(19,25),"hum":(55,72),"rain_p":0.040,"storm_p":0.008},
+}
+PAY_METHODS = ["Credit Card","Cash","Careem Pay","Careem Plus"]
+PAY_PROBS   = [0.42, 0.30, 0.18, 0.10]
 
-            # ── Wait time (VTAT) ─────────────────────────────────────────
-            if cap_avail > 0.82:    wt_range = (1.5, 4.5)
-            elif cap_avail > 0.65:  wt_range = (3.0, 6.5)
-            elif cap_avail > 0.45:  wt_range = (5.0, 10.0)
-            else:                   wt_range = (8.0, 17.0)
-            wait_min = round(float(np.random.uniform(*wt_range)), 1)
+ZONE_PICK_W = np.array([1.8,1.6,1.3,1.5,1.2,1.1,1.0,0.7,1.4,0.8,1.0,0.9])
+ZONE_PICK_W_APT = ZONE_PICK_W.copy()
+ZONE_PICK_W_APT[ZONE_NAMES.index("DXB Airport")] *= 2.0
+ZONE_PICK_W_APT /= ZONE_PICK_W_APT.sum()
+ZONE_PICK_W     /= ZONE_PICK_W.sum()
 
-            # ── Surge ────────────────────────────────────────────────────
-            surge = calc_surge(
-                hour, is_weekend, is_ramadan, is_holiday,
-                ev_mult, wx["weather_demand_factor"],
-                ZONE_DEMAND_MULT[pickup_zone], cap_avail
-            )
+# ── 8. Timestamps ───────────────────────────────────────────────────────────
+print("Sampling timestamps...")
+year_start = pd.Timestamp("2025-01-01")
+month_ends = [31,59,90,120,151,181,212,243,273,304,334,365]
+day_weights = np.zeros(365)
+for m in range(12):
+    ds = 0 if m==0 else month_ends[m-1]
+    de = month_ends[m]
+    day_weights[ds:de] = MONTH_VOL[m]
+day_weights /= day_weights.sum()
 
-            # ── Payment method ────────────────────────────────────────────
-            accepts_cash = PRODUCTS[product]["accepts_cash"]
-            if accepts_cash:
-                pay_opts = ["Card", "Cash", "Careem Pay", "Careem Plus"]
-                # Karama / Bur Dubai / Deira have higher cash rates
-                if pickup_zone in ("Karama", "Bur Dubai", "Deira"):
-                    pay_probs = [0.42, 0.32, 0.18, 0.08]
-                else:
-                    pay_probs = [0.52, 0.20, 0.20, 0.08]
-            else:
-                pay_opts  = ["Card", "Careem Pay", "Careem Plus"]
-                pay_probs = [0.58, 0.30, 0.12]
-            payment = str(np.random.choice(pay_opts, p=pay_probs))
+day_of_year = np.random.choice(365, size=N_RIDES, p=day_weights)
+timestamps_d = year_start + pd.to_timedelta(day_of_year, unit="D")
+months = timestamps_d.month.values
 
-            # ── Price ────────────────────────────────────────────────────
-            final_price, metered_fare = calc_price(product, dist_km, dur_min, surge)
+# Ramadan mask
+is_ram_day = (timestamps_d >= RAMADAN_START) & (timestamps_d <= RAMADAN_END)
 
-            # ── Outcome ──────────────────────────────────────────────────
-            outcome = sim_outcome(surge, wait_min, payment, dist_km,
-                                  wx["is_rain"], hour, pickup_zone)
-            reason  = cancel_reason(outcome, dist_km, payment, wait_min, surge)
+# Vectorized hour sampling
+hour_choice = np.zeros(N_RIDES, dtype=int)
+ram_idx = np.where(is_ram_day)[0]
+reg_idx = np.where(~is_ram_day)[0]
+hour_choice[ram_idx] = np.random.choice(24, size=len(ram_idx), p=H_RAM)
+hour_choice[reg_idx] = np.random.choice(24, size=len(reg_idx), p=H_REG)
+minutes = np.random.randint(0, 60, N_RIDES)
 
-            # ── Ratings ──────────────────────────────────────────────────
-            if outcome == "Completed":
-                cap_rating = round(float(np.clip(np.random.normal(4.32, 0.48), 1, 5)), 1)
-                cust_base  = 4.45
-                if wait_min > 9:    cust_base -= 0.40
-                if wait_min > 12:   cust_base -= 0.25
-                if surge > 1.80:    cust_base -= 0.30
-                if surge > 2.10:    cust_base -= 0.20
-                cust_rating = round(float(np.clip(np.random.normal(cust_base, 0.52), 1, 5)), 1)
-                eta_dev = round(float(np.random.normal(2.5 if (is_peak or wx["is_rain"]) else 0.5, 1.4)), 1)
-            else:
-                cap_rating = cust_rating = eta_dev = None
+timestamps = (
+    timestamps_d
+    + pd.to_timedelta(hour_choice.astype(int), unit="h")
+    + pd.to_timedelta(minutes, unit="m")
+)
 
-            # ── Coordinates (jitter around zone centroid) ────────────────
-            pu_lat = round(ZONES[pickup_zone]["lat"]  + float(np.random.uniform(-0.020, 0.020)), 6)
-            pu_lon = round(ZONES[pickup_zone]["lon"]  + float(np.random.uniform(-0.020, 0.020)), 6)
-            do_lat = round(ZONES[dropoff_zone]["lat"] + float(np.random.uniform(-0.020, 0.020)), 6)
-            do_lon = round(ZONES[dropoff_zone]["lon"] + float(np.random.uniform(-0.020, 0.020)), 6)
+# ── 9. Temporal flags ───────────────────────────────────────────────────────
+dow = timestamps.dayofweek.values          # 0=Mon, 4=Fri, 5=Sat, 6=Sun
+is_fri = (dow == 4); is_sat = (dow == 5)
+is_weekend_uae = is_fri | is_sat
 
-            rows.append({
-                # ── Identifiers
-                "ride_id":                  f"DXB-2025-{ride_id:07d}",
-                "customer_id":              f"CUS{np.random.randint(1, 22001):05d}",
-                "captain_id":               f"CAP{np.random.randint(1, 3201):04d}",
+# RTA peak definition
+is_peak = np.where(
+    is_fri,
+    hour_choice >= 16,
+    ((hour_choice >= 8) & (hour_choice < 10)) | ((hour_choice >= 16) & (hour_choice < 20))
+)
+is_night  = (hour_choice >= 22) | (hour_choice < 6)
+is_offpk  = (~is_peak) & (~is_night)
 
-                # ── Temporal
-                "timestamp":                ts.strftime("%Y-%m-%d %H:%M:%S"),
-                "date":                     d.strftime("%Y-%m-%d"),
-                "hour":                     hour,
-                "minute":                   minute,
-                "day_of_week":              d.weekday(),
-                "day_name":                 d.strftime("%A"),
-                "week_of_year":             d.isocalendar()[1],
-                "month":                    month,
-                "month_name":               d.strftime("%B"),
-                "quarter":                  (month - 1) // 3 + 1,
-                "is_weekend":               is_weekend,
-                "is_peak_hour":             is_peak,
-                "is_late_night":            hour in (0, 1, 2, 3, 4),
-                "is_ramadan":               is_ramadan,
-                "is_uae_public_holiday":    is_holiday,
-                "is_suhoor_window":         is_ramadan and hour in (0, 1, 2, 3),
-                "is_iftar_window":          is_ramadan and hour in (17, 18),
+is_ramadan = is_ram_day.values
+is_suhoor  = is_ramadan & ((hour_choice >= 1) & (hour_choice <= 3))
+is_iftar   = is_ramadan & (hour_choice == 17)
+date_strs  = timestamps.strftime("%Y-%m-%d")
+is_holiday = np.array([d in UAE_HOLIDAYS for d in date_strs])
 
-                # ── Event context
-                "active_event":             ev_name,
-                "event_type":               ev_type,
-                "event_demand_multiplier":  ev_mult,
+# ── 10. Events ──────────────────────────────────────────────────────────────
+active_event = np.full(N_RIDES, "None", dtype=object)
+event_type   = np.full(N_RIDES, "None", dtype=object)
+event_dmult  = np.ones(N_RIDES)
+for ev in EVENTS:
+    mask = (timestamps_d >= pd.Timestamp(ev["start"])) & (timestamps_d <= pd.Timestamp(ev["end"]))
+    active_event[mask] = ev["name"]
+    event_type[mask]   = ev["type"]
+    event_dmult[mask] *= ev["dmult"]
 
-                # ── Weather
-                "temperature_c":            wx["temperature_c"],
-                "humidity_pct":             wx["humidity_pct"],
-                "is_rain":                  wx["is_rain"],
-                "is_sandstorm":             wx["is_sandstorm"],
-                "weather_demand_factor":    wx["weather_demand_factor"],
+# ── 11. Zones ───────────────────────────────────────────────────────────────
+print("Sampling zones...")
+pu_idx = np.random.choice(len(ZONE_NAMES), size=N_RIDES, p=ZONE_PICK_W_APT)
+# Dropoff: uniform over all other zones
+do_idx = np.zeros(N_RIDES, dtype=int)
+for i in range(N_RIDES):
+    probs = ZONE_PICK_W.copy()
+    probs[pu_idx[i]] = 0
+    probs /= probs.sum()
+    do_idx[i] = np.random.choice(len(ZONE_NAMES), p=probs)
 
-                # ── Geography
-                "pickup_zone":              pickup_zone,
-                "dropoff_zone":             dropoff_zone,
-                "pickup_lat":               pu_lat,
-                "pickup_lon":               pu_lon,
-                "dropoff_lat":              do_lat,
-                "dropoff_lon":              do_lon,
-                "pickup_area_type":         ZONES[pickup_zone]["area_type"],
-                "dropoff_area_type":        ZONES[dropoff_zone]["area_type"],
-                "is_airport_ride":          (
-                    pickup_zone == "Dubai Airport (DXB)" or
-                    dropoff_zone == "Dubai Airport (DXB)"
-                ),
-                "is_intrazone_trip":        pickup_zone == dropoff_zone,
+pickup_zone  = np.array(ZONE_NAMES)[pu_idx]
+dropoff_zone = np.array(ZONE_NAMES)[do_idx]
+is_airport   = (pickup_zone == "DXB Airport") | (dropoff_zone == "DXB Airport")
+is_intrazone = (pickup_zone == dropoff_zone)
 
-                # ── Trip details
-                "product_type":             product,
-                "route_distance_km":        dist_km,
-                "trip_duration_min":        dur_min,
-                "avg_speed_kmh":            round(dist_km / (dur_min / 60), 1),
-                "payment_method":           payment,
-                "is_careem_plus":           payment == "Careem Plus",
+pickup_lat  = Z_LAT[pu_idx] + np.random.normal(0, 0.008, N_RIDES)
+pickup_lon  = Z_LON[pu_idx] + np.random.normal(0, 0.008, N_RIDES)
+dropoff_lat = Z_LAT[do_idx] + np.random.normal(0, 0.008, N_RIDES)
+dropoff_lon = Z_LON[do_idx] + np.random.normal(0, 0.008, N_RIDES)
 
-                # ── Supply
-                "captain_availability_score": cap_avail,
-                "wait_time_min":            wait_min,
+print("Computing distances and Salik gates...")
+route_distance_km = get_dist_arr(pickup_zone, dropoff_zone)
+salik_gates       = get_salik_arr(pickup_zone, dropoff_zone)
 
-                # ── Pricing (TARGET for ML model)
-                "surge_multiplier":         surge,
-                "metered_fare_aed":         metered_fare,
-                "final_price_aed":          final_price,
-                "price_per_km_aed":         round(final_price / dist_km, 2),
+# ── 12. Weather ─────────────────────────────────────────────────────────────
+temperature_c = np.zeros(N_RIDES)
+humidity_pct  = np.zeros(N_RIDES)
+is_rain       = np.zeros(N_RIDES, dtype=bool)
+is_sandstorm  = np.zeros(N_RIDES, dtype=bool)
+for m in range(1,13):
+    mask = months == m; w = WEATHER[m]; n = mask.sum()
+    temperature_c[mask] = np.random.uniform(*w["temp"], n)
+    humidity_pct[mask]  = np.random.uniform(*w["hum"],  n)
+    is_rain[mask]       = np.random.random(n) < w["rain_p"]
+    is_sandstorm[mask]  = np.random.random(n) < w["storm_p"]
+weather_dmult = 1.0 + 0.40*is_rain.astype(float) + 0.25*is_sandstorm.astype(float)
 
-                # ── Outcome
-                "booking_status":           outcome,
-                "cancellation_reason":      reason,
-                "captain_rating":           cap_rating,
-                "customer_rating":          cust_rating,
-                "eta_deviation_min":        eta_dev,
-            })
-            ride_id += 1
+# ── 13. Products ────────────────────────────────────────────────────────────
+print("Assigning products...")
+prod_idx = np.where(
+    is_airport,
+    np.random.choice(len(PROD_NAMES), size=N_RIDES, p=SH_APT),
+    np.random.choice(len(PROD_NAMES), size=N_RIDES, p=SH_REG)
+)
+product_type    = np.array(PROD_NAMES)[prod_idx]
+is_hala_product = PD[prod_idx, I_HALA].astype(bool)
 
-        if d.day == 1:
-            elapsed = time.time() - t0
-            print(f"  ✓ {d.strftime('%B %Y'):12s} — {len(rows):>7,} records  [{elapsed:.1f}s]")
+payment_method = np.random.choice(PAY_METHODS, size=N_RIDES, p=PAY_PROBS)
+is_careem_plus = (payment_method == "Careem Plus")
 
-    # ── Save ─────────────────────────────────────────────────────────────────
-    df = pd.DataFrame(rows)
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-    df.to_csv(out, index=False)
+# ── 14. Supply & trip metrics ────────────────────────────────────────────────
+zone_demand = Z_DM[pu_idx] * event_dmult * weather_dmult
+captain_avail = np.clip(
+    1.0 - 0.35*(zone_demand - 1.0) + np.random.normal(0, 0.10, N_RIDES),
+    0.15, 1.00
+)
+wait_base = np.where(is_airport, 5.5,
+            np.where(is_peak, 4.5, 3.0))
+wait_time = np.clip(
+    wait_base * (1.5 - captain_avail) + np.random.exponential(1.5, N_RIDES),
+    1.0, 25.0
+)
+avg_speed = np.where(is_peak,
+    np.random.uniform(22, 30, N_RIDES),
+    np.where(is_night,
+        np.random.uniform(48, 65, N_RIDES),
+        np.random.uniform(32, 48, N_RIDES)
+    )
+)
+trip_duration_min = (route_distance_km / avg_speed) * 60
 
-    elapsed = time.time() - t0
-    print(f"\n{'=' * 65}")
-    print(f"  ✓ Saved: {out}")
-    print(f"  ✓ Records : {len(df):,}")
-    print(f"  ✓ Features : {len(df.columns)}")
-    print(f"  ✓ Time     : {elapsed:.1f}s")
-    print(f"{'=' * 65}")
-    print(f"\n  KEY STATISTICS")
-    print(f"  Completion rate  : {(df['booking_status'] == 'Completed').mean():.1%}")
-    print(f"  Avg final price  : AED {df['final_price_aed'].mean():.2f}")
-    print(f"  Avg surge mult   : {df['surge_multiplier'].mean():.3f}")
-    print(f"  Max surge mult   : {df['surge_multiplier'].max():.2f}x")
-    print(f"  Avg wait time    : {df['wait_time_min'].mean():.1f} min")
-    print(f"  Avg distance     : {df['route_distance_km'].mean():.1f} km")
-    print(f"  Rain days        : {df[df['is_rain']]['date'].nunique()} days")
-    print(f"  Sandstorm days   : {df[df['is_sandstorm']]['date'].nunique()} days")
-    print(f"  Ramadan rides    : {df['is_ramadan'].sum():,}")
-    print(f"  Airport rides    : {df['is_airport_ride'].sum():,}")
-    print(f"  Careem Plus rides: {df['is_careem_plus'].sum():,}")
+# ── 15. Pricing ─────────────────────────────────────────────────────────────
+print("Computing fares...")
+per_km_arr  = PD[prod_idx, I_PKM]
+per_min_arr = PD[prod_idx, I_PMIN]
+min_fare    = PD[prod_idx, I_MINF]
+base_day    = PD[prod_idx, I_BDAY]
+base_night  = PD[prod_idx, I_BNGT]
+book_peak   = PD[prod_idx, I_BKPK]
+book_off    = PD[prod_idx, I_BKOF]
+book_night  = PD[prod_idx, I_BKNT]
 
-    print(f"\n  BOOKING STATUS")
-    print(df["booking_status"].value_counts().to_string())
+flagfall    = np.where(is_night, base_night, base_day)
+booking_fee = np.where(is_peak, book_peak,
+              np.where(is_night, book_night, book_off))
+salik_cost  = salik_gates * 4.0
 
-    print(f"\n  TOP 5 EVENTS BY RIDES")
-    ev = df[df["active_event"] != "None"]["active_event"].value_counts().head(5)
-    print(ev.to_string())
+# Hala (RTA taxi meter)
+hala_apt_pu = is_hala_product & (pickup_zone == "DXB Airport")
+hala_start  = np.where(hala_apt_pu, 25.0, flagfall + booking_fee)
+hala_fare   = hala_start + per_km_arr * route_distance_km + wait_time * 0.50 + salik_cost
+hala_final  = np.maximum(hala_fare, min_fare)
 
-    print(f"\n  AVG PRICE BY PRODUCT (AED)")
-    pp = df[df["booking_status"] == "Completed"].groupby("product_type")["final_price_aed"].mean().round(2)
-    print(pp.to_string())
+# Private hire (Careem dynamic pricing: base + per-km + per-min * full duration)
+demand_supply_gap = np.clip(zone_demand - 1.0, 0.0, 1.5)
+surge_mult  = np.clip(1.0 + demand_supply_gap * 0.55, 1.00, 2.50)
+ph_base     = flagfall + booking_fee
+ph_fare     = ph_base + (per_km_arr * route_distance_km + per_min_arr * trip_duration_min) * surge_mult + salik_cost
+ph_final    = np.maximum(ph_fare, min_fare)
 
-    return df
+final_price    = np.where(is_hala_product, hala_final, ph_final)
+metered_fare   = np.where(is_hala_product, hala_fare,  ph_fare)
+surge_out      = np.where(is_hala_product, 1.0, surge_mult)
 
+# ── 16. Outcomes ────────────────────────────────────────────────────────────
+cancel_prob = np.clip(
+    0.08
+    + (1.0 - captain_avail) * 0.10
+    + is_rain.astype(float) * 0.03
+    + is_sandstorm.astype(float) * 0.03,
+    0.05, 0.28
+)
+cancel_mask = np.random.random(N_RIDES) < cancel_prob
+cancel_why  = np.random.choice(
+    ["Captain Cancelled","Customer Cancelled","No Captain Available"],
+    size=N_RIDES, p=[0.40, 0.40, 0.20]
+)
+status = np.full(N_RIDES, "Completed", dtype=object)
+status[cancel_mask] = cancel_why[cancel_mask]
+cancel_reason_col = np.full(N_RIDES, "N/A", dtype=object)
+cancel_reason_col[cancel_mask] = cancel_why[cancel_mask]
 
-# ═════════════════════════════════════════════════════════════════════════════
-# 9. AUTO-GENERATE DATA DICTIONARY
-# ═════════════════════════════════════════════════════════════════════════════
-DATA_DICTIONARY = """# Data Dictionary — Dubai Ride-Hailing Mirror Dataset 2025
-## XPrice Project | MIT 622 Final Project | Group 1
+capt_rating = np.round(np.random.normal(4.55, 0.30, N_RIDES).clip(1,5), 1)
+cust_rating  = np.round(np.random.normal(4.62, 0.28, N_RIDES).clip(1,5), 1)
+capt_rating[cancel_mask] = np.nan
+cust_rating[cancel_mask]  = np.nan
+eta_dev = np.round(np.random.normal(0, 1.5, N_RIDES), 1)
 
-Generated by: `data/generate_dataset.py`
-Records: ~160,000 | Features: 48 | Period: Jan 1 – Dec 31, 2025 | City: Dubai, UAE
+# ── 17. Assemble ────────────────────────────────────────────────────────────
+print("Assembling DataFrame...")
+ride_ids = [f"RID{2025000000+i:09d}" for i in range(N_RIDES)]
+cust_ids = [f"CUS{np.random.randint(1000000,5000000):07d}" for _ in range(N_RIDES)]
+capt_ids = [f"CAP{np.random.randint(100000, 500000):06d}"  for _ in range(N_RIDES)]
 
----
+df = pd.DataFrame({
+    "ride_id":                    ride_ids,
+    "customer_id":                cust_ids,
+    "captain_id":                 capt_ids,
+    "timestamp":                  timestamps.strftime("%Y-%m-%d %H:%M:%S"),
+    "date":                       date_strs,
+    "hour":                       hour_choice,
+    "minute":                     minutes,
+    "day_of_week":                dow,
+    "day_name":                   timestamps.day_name().values,
+    "week_of_year":               timestamps.isocalendar().week.values,
+    "month":                      months,
+    "month_name":                 timestamps.month_name().values,
+    "quarter":                    timestamps.quarter.values,
+    "is_weekend":                 is_weekend_uae,
+    "is_peak_hour":               is_peak,
+    "is_night":                   is_night,
+    "is_offpeak":                 is_offpk,
+    "is_ramadan":                 is_ramadan,
+    "is_uae_public_holiday":      is_holiday,
+    "is_suhoor_window":           is_suhoor,
+    "is_iftar_window":            is_iftar,
+    "active_event":               active_event,
+    "event_type":                 event_type,
+    "event_demand_multiplier":    np.round(event_dmult, 3),
+    "temperature_c":              np.round(temperature_c, 1),
+    "humidity_pct":               np.round(humidity_pct, 1),
+    "is_rain":                    is_rain,
+    "is_sandstorm":               is_sandstorm,
+    "weather_demand_factor":      np.round(weather_dmult, 3),
+    "pickup_zone":                pickup_zone,
+    "dropoff_zone":               dropoff_zone,
+    "pickup_lat":                 np.round(pickup_lat, 6),
+    "pickup_lon":                 np.round(pickup_lon, 6),
+    "dropoff_lat":                np.round(dropoff_lat, 6),
+    "dropoff_lon":                np.round(dropoff_lon, 6),
+    "pickup_area_type":           np.array(Z_TIER)[pu_idx],
+    "dropoff_area_type":          np.array(Z_TIER)[do_idx],
+    "is_airport_ride":            is_airport,
+    "is_intrazone_trip":          is_intrazone,
+    "route_distance_km":          np.round(route_distance_km, 2),
+    "salik_gates":                salik_gates,
+    "salik_cost_aed":             np.round(salik_cost, 2),
+    "product_type":               product_type,
+    "is_hala_product":            is_hala_product,
+    "payment_method":             payment_method,
+    "is_careem_plus":             is_careem_plus,
+    "captain_availability_score": np.round(captain_avail, 3),
+    "wait_time_min":              np.round(wait_time, 1),
+    "trip_duration_min":          np.round(trip_duration_min, 1),
+    "avg_speed_kmh":              np.round(avg_speed, 1),
+    "surge_multiplier":           np.round(surge_out, 3),
+    "booking_fee_aed":            np.round(booking_fee, 2),
+    "metered_fare_aed":           np.round(metered_fare, 2),
+    "final_price_aed":            np.round(final_price, 2),
+    "price_per_km_aed":           np.round(final_price / np.maximum(route_distance_km, 0.1), 2),
+    "booking_status":             status,
+    "cancellation_reason":        cancel_reason_col,
+    "captain_rating":             capt_rating,
+    "customer_rating":            cust_rating,
+    "eta_deviation_min":          eta_dev,
+})
 
-## IDENTIFIERS
-| Column | Type | Description |
-|--------|------|-------------|
-| ride_id | str | Unique ride identifier (DXB-2025-XXXXXXX) |
-| customer_id | str | Anonymized customer identifier |
-| captain_id | str | Anonymized captain (driver) identifier |
+# ── 18. Validate ────────────────────────────────────────────────────────────
+completed = df[df["booking_status"] == "Completed"]
+apt_n = df["is_airport_ride"].sum()
+print("\n── Validation ──────────────────────────────────────────────────────")
+print(f"  Total rides:        {len(df):,}")
+print(f"  Completed:          {len(completed):,} ({100*len(completed)/len(df):.1f}%)")
+print(f"  Airport rides:      {apt_n:,} ({100*apt_n/len(df):.1f}%)")
+print(f"  Avg price (compl.): AED {completed['final_price_aed'].mean():.2f}")
+print(f"  Price range:        AED {df['final_price_aed'].min():.2f} - {df['final_price_aed'].max():.2f}")
+print(f"  Avg distance:       {df['route_distance_km'].mean():.1f} km")
+print(f"  Avg Salik gates:    {df['salik_gates'].mean():.2f}")
+print(f"  Hala rides:         {df['is_hala_product'].sum():,} ({100*df['is_hala_product'].mean():.1f}%)")
+print(f"\n  Product mix:")
+for p in PROD_NAMES:
+    g = df[df["product_type"]==p]
+    print(f"    {p:<14} {len(g):>6,} ({100*len(g)/len(df):4.1f}%)  avg AED {g['final_price_aed'].mean():.2f}")
 
-## TEMPORAL FEATURES
-| Column | Type | Description |
-|--------|------|-------------|
-| timestamp | datetime | Full booking datetime (YYYY-MM-DD HH:MM:SS) |
-| date | date | Booking date |
-| hour | int | Hour of booking (0–23) |
-| minute | int | Minute of booking (0–59) |
-| day_of_week | int | Day of week (0=Mon … 6=Sun) |
-| day_name | str | Day name (Monday … Sunday) |
-| week_of_year | int | ISO week number (1–53) |
-| month | int | Month (1–12) |
-| month_name | str | Month name |
-| quarter | int | Quarter (1–4) |
-| is_weekend | bool | True if Friday or Saturday (UAE weekend) |
-| is_peak_hour | bool | True if hour in {7,8,9,17,18,19,20} |
-| is_late_night | bool | True if hour in {0,1,2,3,4} |
-| is_ramadan | bool | True if date falls in Ramadan 2025 (Mar 1–29) |
-| is_uae_public_holiday | bool | True if UAE official public holiday |
-| is_suhoor_window | bool | Ramadan pre-dawn meal window (Ramadan, 00:00–03:00) |
-| is_iftar_window | bool | Ramadan sunset meal window (Ramadan, 17:00–18:00) — highest surge period |
+print(f"\n  Period check (20km DXB->Marina Hala Taxi, peak):")
+# Manual calculation: AED 25 + 20*2.20 + avg 3min wait*0.50 + 3 Salik*4
+print(f"    Expected ~AED {25 + 20*2.20 + 3*0.50 + 3*4:.1f} (AED 25 flagfall + km + wait + Salik)")
 
-## EVENT FEATURES
-| Column | Type | Description |
-|--------|------|-------------|
-| active_event | str | Name of active major event, or "None" |
-| event_type | str | Event category (festival, conference, public_holiday, etc.) |
-| event_demand_multiplier | float | Demand boost factor from event (1.0 = no event) |
-
-## WEATHER FEATURES
-| Column | Type | Description |
-|--------|------|-------------|
-| temperature_c | float | Air temperature in °C (Dubai range: 14–48°C) |
-| humidity_pct | float | Relative humidity % |
-| is_rain | bool | True if it rained that day (rare in Dubai — ~8 days/year) |
-| is_sandstorm | bool | True if sandstorm conditions |
-| weather_demand_factor | float | Demand multiplier from weather (1.0 = clear; up to 1.85 for rain) |
-
-## GEOGRAPHIC FEATURES
-| Column | Type | Description |
-|--------|------|-------------|
-| pickup_zone | str | Pickup zone name (16 Dubai zones) |
-| dropoff_zone | str | Dropoff zone name |
-| pickup_lat | float | Pickup latitude (jittered within zone centroid ±0.02°) |
-| pickup_lon | float | Pickup longitude |
-| dropoff_lat | float | Dropoff latitude |
-| dropoff_lon | float | Dropoff longitude |
-| pickup_area_type | str | Zone type (tourist_commercial, airport, industrial, etc.) |
-| dropoff_area_type | str | Zone type of dropoff |
-| is_airport_ride | bool | True if pickup or dropoff is Dubai Airport (DXB) |
-| is_intrazone_trip | bool | True if pickup and dropoff are in same zone |
-
-## TRIP FEATURES
-| Column | Type | Description |
-|--------|------|-------------|
-| product_type | str | Careem product (Go, Go+, Business, Hala Taxi, Hala EV) |
-| route_distance_km | float | Road distance in km (calibrated to Google Maps routing) |
-| trip_duration_min | float | Estimated trip duration in minutes |
-| avg_speed_kmh | float | Implied average speed (distance/duration) |
-| payment_method | str | Payment type (Card, Cash, Careem Pay, Careem Plus) |
-| is_careem_plus | bool | True if paid via Careem Plus subscription |
-
-## SUPPLY FEATURES
-| Column | Type | Description |
-|--------|------|-------------|
-| captain_availability_score | float | Captain supply score for pickup zone at booking time (0–1; 1 = fully available) |
-| wait_time_min | float | Estimated time to captain arrival (VTAT) in minutes |
-
-## PRICING FEATURES (ML TARGET)
-| Column | Type | Description |
-|--------|------|-------------|
-| surge_multiplier | float | Surge multiplier applied (1.0–2.5x; 1.0 = no surge) |
-| metered_fare_aed | float | Base metered fare before surge (AED) |
-| final_price_aed | float | **PRIMARY TARGET** — Final fare paid by customer (AED) |
-| price_per_km_aed | float | Derived: final_price / route_distance |
-
-## OUTCOME FEATURES
-| Column | Type | Description |
-|--------|------|-------------|
-| booking_status | str | Completed / Captain Cancelled / Customer Cancelled / No Captain Found |
-| cancellation_reason | str | Reason for cancellation (N/A for completed rides) |
-| captain_rating | float | Captain's rating of customer (1–5; null if not completed) |
-| customer_rating | float | Customer's rating of captain (1–5; null if not completed) |
-| eta_deviation_min | float | ETA accuracy: actual_arrival − promised_ETA in minutes (null if not completed) |
-
----
-
-## ZONE REFERENCE TABLE
-| Zone | Lat | Lon | Area Type | Demand Tier |
-|------|-----|-----|-----------|-------------|
-| Downtown Dubai | 25.1972 | 55.2796 | tourist_commercial | very_high |
-| Business Bay | 25.1865 | 55.2628 | commercial | high |
-| DIFC | 25.2118 | 55.2826 | financial_commercial | high |
-| Dubai Marina | 25.0763 | 55.1303 | tourist_residential | very_high |
-| JBR | 25.0774 | 55.1296 | tourist_beach | high |
-| Palm Jumeirah | 25.1124 | 55.1390 | luxury_residential | high |
-| Jumeirah | 25.2084 | 55.2450 | residential | medium |
-| Deira | 25.2631 | 55.3246 | commercial_old_city | high |
-| Bur Dubai | 25.2532 | 55.3000 | mixed_old_city | medium |
-| Dubai Airport (DXB) | 25.2532 | 55.3657 | airport | very_high |
-| Al Quoz | 25.1548 | 55.2347 | industrial | low |
-| Dubai Hills | 25.0912 | 55.2400 | residential_suburban | medium |
-| Al Barsha | 25.1059 | 55.2015 | residential_commercial | medium |
-| Mirdif | 25.2197 | 55.4144 | residential_suburban | medium |
-| Karama | 25.2375 | 55.3057 | residential_commercial | medium |
-| Sharjah Border | 25.3463 | 55.4213 | border_transit | low |
-"""
-
-
-if __name__ == "__main__":
-    # Write data dictionary
-    dict_path = "data/DATA_DICTIONARY.md"
-    os.makedirs("data", exist_ok=True)
-    with open(dict_path, "w", encoding="utf-8") as f:
-        f.write(DATA_DICTIONARY)
-    print(f"Data dictionary written to {dict_path}\n")
-
-    # Generate dataset
-    df = generate(target=160_000, out="data/processed/dubai_rides_2025.csv")
+# ── 19. Save ────────────────────────────────────────────────────────────────
+df.to_csv(OUT_PATH, index=False)
+print(f"\n✓ Dataset saved -> {OUT_PATH}")
+print(f"  Shape: {df.shape[0]:,} rows x {df.shape[1]} columns")
