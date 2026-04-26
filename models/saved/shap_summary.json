@@ -1,0 +1,82 @@
+[
+  {
+    "feature": "route_distance_km",
+    "mean_abs_shap": 30.0065
+  },
+  {
+    "feature": "is_hala_product",
+    "mean_abs_shap": 16.6408
+  },
+  {
+    "feature": "salik_gates",
+    "mean_abs_shap": 6.2895
+  },
+  {
+    "feature": "booking_fee_aed",
+    "mean_abs_shap": 5.1075
+  },
+  {
+    "feature": "demand_index",
+    "mean_abs_shap": 3.593
+  },
+  {
+    "feature": "trip_duration_min",
+    "mean_abs_shap": 3.2806
+  },
+  {
+    "feature": "product_type_Hala Taxi",
+    "mean_abs_shap": 3.1213
+  },
+  {
+    "feature": "product_type_MAX",
+    "mean_abs_shap": 3.0555
+  },
+  {
+    "feature": "product_type_Premier",
+    "mean_abs_shap": 2.8664
+  },
+  {
+    "feature": "product_type_Executive",
+    "mean_abs_shap": 1.5672
+  },
+  {
+    "feature": "captain_availability_score",
+    "mean_abs_shap": 1.3881
+  },
+  {
+    "feature": "pickup_zone_DXB Airport",
+    "mean_abs_shap": 0.9767
+  },
+  {
+    "feature": "product_type_Comfort",
+    "mean_abs_shap": 0.8092
+  },
+  {
+    "feature": "product_type_Hala MAX",
+    "mean_abs_shap": 0.6296
+  },
+  {
+    "feature": "supply_pressure_index",
+    "mean_abs_shap": 0.5615
+  },
+  {
+    "feature": "is_peak_hour",
+    "mean_abs_shap": 0.5346
+  },
+  {
+    "feature": "pickup_lon",
+    "mean_abs_shap": 0.5092
+  },
+  {
+    "feature": "event_demand_multiplier",
+    "mean_abs_shap": 0.4574
+  },
+  {
+    "feature": "salik_cost_aed",
+    "mean_abs_shap": 0.3008
+  },
+  {
+    "feature": "avg_speed_kmh",
+    "mean_abs_shap": 0.2994
+  }
+]
