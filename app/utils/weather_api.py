@@ -5,7 +5,7 @@ from datetime import datetime
 
 import requests
 
-from utils.domain import WEATHER_PROFILES, ZONES, stable_rng
+from utils.domain import WEATHER_PROFILES, get_nearest_zone, stable_rng
 
 
 def _classify_weather(is_rain: bool, is_sandstorm: bool, humidity_pct: float) -> str:
@@ -18,9 +18,9 @@ def _classify_weather(is_rain: bool, is_sandstorm: bool, humidity_pct: float) ->
     return "Clear"
 
 
-def _mock_weather(zone_name: str, ride_dt: datetime):
+def _mock_weather(lat: float, lon: float, ride_dt: datetime):
     profile = WEATHER_PROFILES[ride_dt.month]
-    rng = stable_rng("weather", zone_name, ride_dt.date().isoformat())
+    rng = stable_rng("weather", round(lat, 4), round(lon, 4), ride_dt.date().isoformat())
     is_rain = bool(rng.random() < profile["rain_p"])
     is_sandstorm = bool((not is_rain) and rng.random() < profile["storm_p"])
     temperature_c = float(rng.uniform(*profile["temp"]))
@@ -37,17 +37,16 @@ def _mock_weather(zone_name: str, ride_dt: datetime):
     }
 
 
-def _live_weather(zone_name: str):
+def _live_weather(lat: float, lon: float):
     api_key = os.getenv("OPENWEATHER_API_KEY")
     if not api_key:
         return None
 
-    zone = ZONES[zone_name]
     response = requests.get(
         "https://api.openweathermap.org/data/2.5/weather",
         params={
-            "lat": zone["lat"],
-            "lon": zone["lon"],
+            "lat": lat,
+            "lon": lon,
             "appid": api_key,
             "units": "metric",
         },
@@ -73,10 +72,14 @@ def _live_weather(zone_name: str):
     }
 
 
-def get_weather(zone_name: str, ride_dt: datetime, prefer_live: bool = True):
+def get_weather(lat: float, lon: float, ride_dt: datetime, prefer_live: bool = True):
     if prefer_live and os.getenv("OPENWEATHER_API_KEY") and ride_dt.date() == datetime.now().date():
         try:
-            return _live_weather(zone_name)
+            live_weather = _live_weather(lat, lon)
+            live_weather["nearest_zone"] = get_nearest_zone(lat, lon)
+            return live_weather
         except requests.RequestException:
             pass
-    return _mock_weather(zone_name, ride_dt)
+    mock_weather = _mock_weather(lat, lon, ride_dt)
+    mock_weather["nearest_zone"] = get_nearest_zone(lat, lon)
+    return mock_weather

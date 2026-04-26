@@ -144,6 +144,27 @@ def get_dist_arr(pu_arr, do_arr):
             out[i] = base * np.random.uniform(0.90, 1.10)
     return out
 
+
+def haversine_arr(lat1, lon1, lat2, lon2):
+    radius_km = 6371.0
+    phi1 = np.deg2rad(lat1)
+    phi2 = np.deg2rad(lat2)
+    dphi = np.deg2rad(lat2 - lat1)
+    dlambda = np.deg2rad(lon2 - lon1)
+    a = np.sin(dphi / 2.0) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2.0) ** 2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    return radius_km * c
+
+
+def bearing_arr(lat1, lon1, lat2, lon2):
+    phi1 = np.deg2rad(lat1)
+    phi2 = np.deg2rad(lat2)
+    dlambda = np.deg2rad(lon2 - lon1)
+    y = np.sin(dlambda) * np.cos(phi2)
+    x = np.cos(phi1) * np.sin(phi2) - np.sin(phi1) * np.cos(phi2) * np.cos(dlambda)
+    theta = np.arctan2(y, x)
+    return (np.rad2deg(theta) + 360.0) % 360.0
+
 # ── 3. Salik gates per zone pair ────────────────────────────────────────────
 SALIK = {
     ("Marina",      "Downtown"):    2, ("Marina",      "DIFC"):        2,
@@ -358,7 +379,11 @@ dropoff_lat = Z_LAT[do_idx] + np.random.normal(0, 0.008, N_RIDES)
 dropoff_lon = Z_LON[do_idx] + np.random.normal(0, 0.008, N_RIDES)
 
 print("Computing distances and Salik gates...")
-route_distance_km = get_dist_arr(pickup_zone, dropoff_zone)
+route_direct_distance_km = haversine_arr(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+route_distance_seed = get_dist_arr(pickup_zone, dropoff_zone)
+route_distance_km = np.maximum(route_distance_seed, route_direct_distance_km * np.random.uniform(1.08, 1.45, N_RIDES))
+route_efficiency_ratio = route_distance_km / np.maximum(route_direct_distance_km, 0.5)
+route_bearing_deg = bearing_arr(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
 salik_gates       = get_salik_arr(pickup_zone, dropoff_zone)
 
 # ── 12. Weather ─────────────────────────────────────────────────────────────
@@ -388,6 +413,8 @@ payment_method = np.random.choice(PAY_METHODS, size=N_RIDES, p=PAY_PROBS)
 is_careem_plus = (payment_method == "Careem Plus")
 
 # ── 14. Supply & trip metrics ────────────────────────────────────────────────
+pickup_density_score = Z_DM[pu_idx]
+dropoff_density_score = Z_DM[do_idx]
 temporal_demand = np.where(is_peak, 1.18, np.where(is_night, 0.92, 1.00))
 ramadan_demand = np.where(is_iftar, 1.35, np.where(is_suhoor, 1.15, np.where(is_ramadan, 0.96, 1.00)))
 weekend_demand = np.where(is_weekend_uae, 1.05, 1.00)
@@ -401,19 +428,32 @@ captain_avail = np.clip(
     0.15, 1.00
 )
 supply_pressure_index = np.clip(1.0 - captain_avail, 0.0, 1.0)
+traffic_index = np.clip(
+    0.78
+    + 0.28 * is_peak.astype(float)
+    + 0.10 * is_weekend_uae.astype(float)
+    + 0.16 * (event_dmult - 1.0)
+    + 0.12 * (weather_dmult - 1.0)
+    + 0.08 * is_airport.astype(float)
+    + 0.08 * np.clip(route_efficiency_ratio - 1.0, 0.0, 1.5)
+    + np.random.normal(0, 0.05, N_RIDES),
+    0.65,
+    2.20,
+)
 wait_base = np.where(is_airport, 5.5,
             np.where(is_peak, 4.5, 3.0))
 wait_time = np.clip(
-    wait_base * (1.5 - captain_avail) + np.random.exponential(1.5, N_RIDES),
+    wait_base * (1.5 - captain_avail) * (0.95 + 0.20 * traffic_index) + np.random.exponential(1.5, N_RIDES),
     1.0, 25.0
 )
-avg_speed = np.where(is_peak,
-    np.random.uniform(22, 30, N_RIDES),
+free_flow_speed = np.where(is_peak,
+    np.random.uniform(38, 52, N_RIDES),
     np.where(is_night,
-        np.random.uniform(48, 65, N_RIDES),
-        np.random.uniform(32, 48, N_RIDES)
+        np.random.uniform(58, 72, N_RIDES),
+        np.random.uniform(44, 58, N_RIDES)
     )
 )
+avg_speed = np.clip(free_flow_speed / traffic_index, 12.0, 78.0)
 trip_duration_min = (route_distance_km / avg_speed) * 60
 
 # ── 15. Pricing ─────────────────────────────────────────────────────────────
@@ -519,7 +559,12 @@ df = pd.DataFrame({
     "dropoff_area_type":          np.array(Z_TIER)[do_idx],
     "is_airport_ride":            is_airport,
     "is_intrazone_trip":          is_intrazone,
+    "pickup_density_score":       np.round(pickup_density_score, 3),
+    "dropoff_density_score":      np.round(dropoff_density_score, 3),
+    "route_direct_distance_km":   np.round(route_direct_distance_km, 2),
     "route_distance_km":          np.round(route_distance_km, 2),
+    "route_efficiency_ratio":     np.round(route_efficiency_ratio, 3),
+    "route_bearing_deg":          np.round(route_bearing_deg, 2),
     "salik_gates":                salik_gates,
     "salik_cost_aed":             np.round(salik_cost, 2),
     "product_type":               product_type,
@@ -529,6 +574,7 @@ df = pd.DataFrame({
     "demand_index":               np.round(demand_index, 3),
     "captain_availability_score": np.round(captain_avail, 3),
     "supply_pressure_index":      np.round(supply_pressure_index, 3),
+    "traffic_index":              np.round(traffic_index, 3),
     "wait_time_min":              np.round(wait_time, 1),
     "trip_duration_min":          np.round(trip_duration_min, 1),
     "avg_speed_kmh":              np.round(avg_speed, 1),
@@ -553,9 +599,11 @@ print(f"  Completed:          {len(completed):,} ({100*len(completed)/len(df):.1
 print(f"  Airport rides:      {apt_n:,} ({100*apt_n/len(df):.1f}%)")
 print(f"  Avg price (compl.): AED {completed['final_price_aed'].mean():.2f}")
 print(f"  Price range:        AED {df['final_price_aed'].min():.2f} - {df['final_price_aed'].max():.2f}")
+print(f"  Avg direct route:   {df['route_direct_distance_km'].mean():.1f} km")
 print(f"  Avg distance:       {df['route_distance_km'].mean():.1f} km")
 print(f"  Avg Salik gates:    {df['salik_gates'].mean():.2f}")
 print(f"  Avg demand index:   {df['demand_index'].mean():.2f}")
+print(f"  Avg traffic index:  {df['traffic_index'].mean():.2f}")
 print(f"  Hala rides:         {df['is_hala_product'].sum():,} ({100*df['is_hala_product'].mean():.1f}%)")
 print(f"\n  Product mix:")
 for p in PROD_NAMES:

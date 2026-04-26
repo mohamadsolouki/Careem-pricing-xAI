@@ -184,6 +184,9 @@ PRODUCT_SPECS = {
 PAYMENT_METHODS = ["Credit Card", "Cash", "Careem Pay", "Careem Plus"]
 ZONE_NAMES = list(ZONES)
 PRODUCT_NAMES = list(PRODUCT_SPECS)
+DUBAI_CENTER = (25.2048, 55.2708)
+DEFAULT_PICKUP_POINT = (25.2048, 55.2708)
+DEFAULT_DROPOFF_POINT = (25.0815, 55.1403)
 RAMADAN_START = pd.Timestamp("2025-03-01")
 RAMADAN_END = pd.Timestamp("2025-03-29")
 UAE_HOLIDAYS = {
@@ -216,16 +219,47 @@ def normalize_calendar_date(ride_dt: datetime | pd.Timestamp) -> pd.Timestamp:
     return pd.Timestamp(year=2025, month=timestamp.month, day=timestamp.day, hour=timestamp.hour, minute=timestamp.minute)
 
 
-def get_distance_km(pickup_zone: str, dropoff_zone: str) -> float:
-    rng = stable_rng("distance", pickup_zone, dropoff_zone)
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    radius_km = 6371.0
+    phi1 = np.deg2rad(lat1)
+    phi2 = np.deg2rad(lat2)
+    dphi = np.deg2rad(lat2 - lat1)
+    dlambda = np.deg2rad(lon2 - lon1)
+    a = np.sin(dphi / 2.0) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2.0) ** 2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    return float(radius_km * c)
+
+
+def bearing_deg(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    phi1 = np.deg2rad(lat1)
+    phi2 = np.deg2rad(lat2)
+    dlambda = np.deg2rad(lon2 - lon1)
+    y = np.sin(dlambda) * np.cos(phi2)
+    x = np.cos(phi1) * np.sin(phi2) - np.sin(phi1) * np.cos(phi2) * np.cos(dlambda)
+    theta = np.arctan2(y, x)
+    return float((np.rad2deg(theta) + 360.0) % 360.0)
+
+
+def get_nearest_zone(lat: float, lon: float) -> str:
+    return min(
+        ZONE_NAMES,
+        key=lambda candidate: (ZONES[candidate]["lat"] - lat) ** 2 + (ZONES[candidate]["lon"] - lon) ** 2,
+    )
+
+
+def get_distance_km(pickup_lat: float, pickup_lon: float, dropoff_lat: float, dropoff_lon: float) -> float:
+    pickup_zone = get_nearest_zone(pickup_lat, pickup_lon)
+    dropoff_zone = get_nearest_zone(dropoff_lat, dropoff_lon)
+    rng = stable_rng("distance", round(pickup_lat, 5), round(pickup_lon, 5), round(dropoff_lat, 5), round(dropoff_lon, 5))
+    direct_distance = haversine_km(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
     if pickup_zone == dropoff_zone:
-        return round(float(rng.uniform(1.8, 4.2)), 2)
+        return round(float(max(direct_distance * rng.uniform(1.10, 1.45), rng.uniform(1.8, 4.2))), 2)
 
     key = (pickup_zone, dropoff_zone)
     if key not in DIST_MATRIX:
         key = (dropoff_zone, pickup_zone)
-    base_distance = DIST_MATRIX.get(key, 15.0)
-    return round(float(base_distance * rng.uniform(0.95, 1.05)), 2)
+    base_distance = DIST_MATRIX.get(key, max(direct_distance * 1.20, 15.0))
+    return round(float(max(base_distance * rng.uniform(0.95, 1.05), direct_distance * rng.uniform(1.08, 1.35))), 2)
 
 
 def get_salik_gates(pickup_zone: str, dropoff_zone: str) -> int:
@@ -233,6 +267,16 @@ def get_salik_gates(pickup_zone: str, dropoff_zone: str) -> int:
     if key not in SALIK:
         key = (dropoff_zone, pickup_zone)
     return int(SALIK.get(key, 0))
+
+
+def classify_traffic(traffic_index: float) -> str:
+    if traffic_index >= 1.65:
+        return "Severe"
+    if traffic_index >= 1.30:
+        return "Heavy"
+    if traffic_index >= 0.95:
+        return "Moderate"
+    return "Light"
 
 
 def get_event_context(ride_dt: datetime | pd.Timestamp) -> dict[str, object]:
@@ -284,27 +328,109 @@ def get_time_context(ride_dt: datetime | pd.Timestamp) -> dict[str, object]:
     }
 
 
+def build_fallback_route_context(
+    pickup_lat: float,
+    pickup_lon: float,
+    dropoff_lat: float,
+    dropoff_lon: float,
+    ride_dt: datetime | pd.Timestamp,
+) -> dict[str, object]:
+    pickup_zone = get_nearest_zone(pickup_lat, pickup_lon)
+    dropoff_zone = get_nearest_zone(dropoff_lat, dropoff_lon)
+    time_context = get_time_context(ride_dt)
+    rng = stable_rng(
+        "route-context",
+        round(pickup_lat, 5),
+        round(pickup_lon, 5),
+        round(dropoff_lat, 5),
+        round(dropoff_lon, 5),
+        time_context["timestamp"].isoformat(),
+    )
+
+    direct_distance_km = haversine_km(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+    distance_km = get_distance_km(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+    efficiency_ratio = distance_km / max(direct_distance_km, 0.5)
+    is_airport_ride = pickup_zone == "DXB Airport" or dropoff_zone == "DXB Airport"
+
+    traffic_index = float(
+        np.clip(
+            0.82
+            + 0.34 * float(time_context["is_peak_hour"])
+            + 0.10 * float(time_context["is_weekend"])
+            + 0.08 * float(is_airport_ride)
+            + 0.08 * np.clip(efficiency_ratio - 1.0, 0.0, 1.5)
+            + rng.normal(0, 0.04),
+            0.68,
+            2.20,
+        )
+    )
+    free_flow_speed = (
+        rng.uniform(38, 52)
+        if time_context["is_peak_hour"]
+        else (rng.uniform(58, 72) if time_context["is_late_night"] else rng.uniform(44, 58))
+    )
+    avg_speed_kmh = float(np.clip(free_flow_speed / traffic_index, 12.0, 78.0))
+    duration_min = float((distance_km / max(avg_speed_kmh, 1.0)) * 60)
+    return {
+        "pickup_zone": pickup_zone,
+        "dropoff_zone": dropoff_zone,
+        "distance_km": round(distance_km, 2),
+        "direct_distance_km": round(direct_distance_km, 2),
+        "efficiency_ratio": round(efficiency_ratio, 3),
+        "duration_min": round(duration_min, 1),
+        "bearing_deg": round(bearing_deg(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon), 2),
+        "traffic_index": round(traffic_index, 3),
+        "traffic_source": "Synthetic traffic model",
+        "traffic_condition": classify_traffic(traffic_index),
+        "route_source": "Synthetic route model",
+        "route_geometry": [(pickup_lat, pickup_lon), (dropoff_lat, dropoff_lon)],
+    }
+
+
 def build_trip_record(
-    pickup_zone: str,
-    dropoff_zone: str,
+    pickup_lat: float,
+    pickup_lon: float,
+    dropoff_lat: float,
+    dropoff_lon: float,
     product_type: str,
     ride_dt: datetime | pd.Timestamp,
     weather: dict[str, object],
     payment_method: str,
+    route_context: dict[str, object] | None = None,
 ) -> dict[str, object]:
     time_context = get_time_context(ride_dt)
     event_context = get_event_context(ride_dt)
+    route_context = route_context or build_fallback_route_context(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, ride_dt)
+
+    pickup_zone = str(route_context.get("pickup_zone") or get_nearest_zone(pickup_lat, pickup_lon))
+    dropoff_zone = str(route_context.get("dropoff_zone") or get_nearest_zone(dropoff_lat, dropoff_lon))
     pickup_meta = ZONES[pickup_zone]
     dropoff_meta = ZONES[dropoff_zone]
-    rng = stable_rng("scenario", pickup_zone, dropoff_zone, product_type, time_context["timestamp"].isoformat(), payment_method)
+    rng = stable_rng(
+        "scenario",
+        round(pickup_lat, 5),
+        round(pickup_lon, 5),
+        round(dropoff_lat, 5),
+        round(dropoff_lon, 5),
+        product_type,
+        time_context["timestamp"].isoformat(),
+        payment_method,
+    )
 
-    route_distance_km = get_distance_km(pickup_zone, dropoff_zone)
+    route_distance_km = float(route_context["distance_km"])
+    route_direct_distance_km = float(route_context["direct_distance_km"])
+    route_efficiency_ratio = float(route_context["efficiency_ratio"])
+    route_bearing = float(route_context["bearing_deg"])
+    traffic_index = float(route_context["traffic_index"])
+    trip_duration_min = float(route_context["duration_min"])
     salik_gates = get_salik_gates(pickup_zone, dropoff_zone)
     salik_cost_aed = round(salik_gates * 4.0, 2)
     is_airport_ride = pickup_zone == "DXB Airport" or dropoff_zone == "DXB Airport"
     is_intrazone_trip = pickup_zone == dropoff_zone
     is_hala_product = bool(PRODUCT_SPECS[product_type]["is_hala"])
     is_careem_plus = payment_method == "Careem Plus"
+    pickup_density_score = pickup_meta["dmult"]
+    dropoff_density_score = dropoff_meta["dmult"]
 
     temporal_demand = 1.18 if time_context["is_peak_hour"] else (0.92 if time_context["is_late_night"] else 1.00)
     ramadan_demand = 1.35 if time_context["is_iftar_window"] else (1.15 if time_context["is_suhoor_window"] else (0.96 if time_context["is_ramadan"] else 1.00))
@@ -317,20 +443,17 @@ def build_trip_record(
             * temporal_demand
             * ramadan_demand
             * weekend_demand,
-            0.75,
+            0.75 + 0.05 * max(traffic_index - 1.0, 0.0),
             3.00,
         )
     )
 
-    captain_availability_score = float(np.clip(1.0 - 0.32 * (demand_index - 1.0) + rng.normal(0, 0.06), 0.15, 1.0))
+    captain_availability_score = float(np.clip(1.0 - 0.30 * (demand_index - 1.0) - 0.05 * max(traffic_index - 1.0, 0.0) + rng.normal(0, 0.06), 0.15, 1.0))
     supply_pressure_index = float(np.clip(1.0 - captain_availability_score, 0.0, 1.0))
 
     wait_base = 5.5 if is_airport_ride else (4.5 if time_context["is_peak_hour"] else 3.0)
-    wait_time_min = float(np.clip(wait_base * (1.5 - captain_availability_score) + rng.uniform(0.4, 2.2), 1.0, 25.0))
-
-    speed_low, speed_high = (22, 30) if time_context["is_peak_hour"] else ((48, 65) if time_context["is_late_night"] else (32, 48))
-    avg_speed_kmh = float(rng.uniform(speed_low, speed_high))
-    trip_duration_min = float((route_distance_km / max(avg_speed_kmh, 1.0)) * 60)
+    wait_time_min = float(np.clip(wait_base * (1.5 - captain_availability_score) * (0.95 + 0.20 * traffic_index) + rng.uniform(0.4, 2.2), 1.0, 25.0))
+    avg_speed_kmh = float(np.clip(route_distance_km / max(trip_duration_min / 60.0, 0.15), 12.0, 78.0))
 
     product = PRODUCT_SPECS[product_type]
     flagfall = product["base_night"] if time_context["is_late_night"] else product["base_day"]
@@ -350,11 +473,6 @@ def build_trip_record(
         surge_multiplier = float(np.clip(1.0 + demand_supply_gap * 0.55, 1.0, 2.5))
         metered_fare_aed = flagfall + booking_fee_aed + (product["per_km"] * route_distance_km + product["per_min"] * trip_duration_min) * surge_multiplier + salik_cost_aed
         final_price_aed = max(metered_fare_aed, product["min_fare"])
-
-    pickup_lat = pickup_meta["lat"] + rng.normal(0, 0.003)
-    pickup_lon = pickup_meta["lon"] + rng.normal(0, 0.003)
-    dropoff_lat = dropoff_meta["lat"] + rng.normal(0, 0.003)
-    dropoff_lon = dropoff_meta["lon"] + rng.normal(0, 0.003)
 
     return {
         "ride_id": "SIMULATED-RIDE",
@@ -396,7 +514,12 @@ def build_trip_record(
         "dropoff_area_type": dropoff_meta["tier"],
         "is_airport_ride": is_airport_ride,
         "is_intrazone_trip": is_intrazone_trip,
+        "pickup_density_score": round(float(pickup_density_score), 3),
+        "dropoff_density_score": round(float(dropoff_density_score), 3),
+        "route_direct_distance_km": round(route_direct_distance_km, 2),
         "route_distance_km": round(route_distance_km, 2),
+        "route_efficiency_ratio": round(route_efficiency_ratio, 3),
+        "route_bearing_deg": round(route_bearing, 2),
         "salik_gates": salik_gates,
         "salik_cost_aed": round(salik_cost_aed, 2),
         "product_type": product_type,
@@ -406,6 +529,7 @@ def build_trip_record(
         "demand_index": round(demand_index, 3),
         "captain_availability_score": round(captain_availability_score, 3),
         "supply_pressure_index": round(supply_pressure_index, 3),
+        "traffic_index": round(traffic_index, 3),
         "wait_time_min": round(wait_time_min, 1),
         "trip_duration_min": round(trip_duration_min, 1),
         "avg_speed_kmh": round(avg_speed_kmh, 1),
@@ -421,6 +545,10 @@ def build_trip_record(
         "eta_deviation_min": 0.0,
         "weather_source": weather.get("source", "Unknown"),
         "weather_label": weather.get("weather_label", "Clear"),
+        "traffic_source": route_context.get("traffic_source", "Synthetic traffic model"),
+        "traffic_condition": route_context.get("traffic_condition", classify_traffic(traffic_index)),
+        "route_source": route_context.get("route_source", "Synthetic route model"),
+        "route_geometry": route_context.get("route_geometry", [(pickup_lat, pickup_lon), (dropoff_lat, dropoff_lon)]),
     }
 
 

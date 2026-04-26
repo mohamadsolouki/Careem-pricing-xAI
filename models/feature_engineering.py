@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 
-CAT_COLS = ["pickup_zone", "dropoff_zone", "product_type", "payment_method", "event_type"]
+CAT_COLS = ["product_type", "payment_method", "event_type"]
 
 BOOL_COLS = [
     "is_weekend",
@@ -46,9 +46,16 @@ EXCLUDE = [
     "customer_rating",
     "eta_deviation_min",
     "active_event",
+    "pickup_zone",
+    "dropoff_zone",
     "pickup_area_type",
     "dropoff_area_type",
     "quarter",
+    "weather_source",
+    "weather_label",
+    "traffic_source",
+    "traffic_condition",
+    "route_source",
 ]
 
 
@@ -67,6 +74,29 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     frame["ramadan_x_hour"] = frame["is_ramadan"].astype(int) * frame["hour"]
     frame["event_x_peak"] = (frame["active_event"] != "None").astype(int) * frame["is_peak_hour"].astype(int)
     frame["airport_x_peak"] = frame["is_airport_ride"].astype(int) * frame["is_peak_hour"].astype(int)
+
+    if {"pickup_lat", "pickup_lon", "dropoff_lat", "dropoff_lon"}.issubset(frame.columns):
+        frame["route_mid_lat"] = (frame["pickup_lat"] + frame["dropoff_lat"]) / 2
+        frame["route_mid_lon"] = (frame["pickup_lon"] + frame["dropoff_lon"]) / 2
+        frame["lat_delta"] = frame["dropoff_lat"] - frame["pickup_lat"]
+        frame["lon_delta"] = frame["dropoff_lon"] - frame["pickup_lon"]
+
+    if "route_bearing_deg" in frame.columns:
+        bearing_rad = np.deg2rad(frame["route_bearing_deg"])
+        frame["bearing_sin"] = np.sin(bearing_rad)
+        frame["bearing_cos"] = np.cos(bearing_rad)
+
+    if {"route_distance_km", "route_direct_distance_km"}.issubset(frame.columns):
+        frame["distance_gap_km"] = frame["route_distance_km"] - frame["route_direct_distance_km"]
+
+    if "traffic_index" in frame.columns:
+        frame["traffic_x_peak"] = frame["traffic_index"] * frame["is_peak_hour"].astype(int)
+
+    if {"demand_index", "traffic_index"}.issubset(frame.columns):
+        frame["demand_x_traffic"] = frame["demand_index"] * frame["traffic_index"]
+
+    if {"route_efficiency_ratio", "traffic_index"}.issubset(frame.columns):
+        frame["efficiency_x_traffic"] = frame["route_efficiency_ratio"] * frame["traffic_index"]
 
     return frame
 
