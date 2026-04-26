@@ -25,7 +25,7 @@ from utils.ui import apply_theme, card, hero
 from utils.weather_api import get_weather
 
 
-st.set_page_config(page_title="XPrice Rider Simulator", page_icon="AED", layout="wide")
+st.set_page_config(page_title="XPrice Rider Simulator", layout="wide")
 apply_theme()
 
 today = datetime.now()
@@ -65,10 +65,10 @@ with st.sidebar:
     use_live_traffic = st.toggle("Use live traffic when available", value=True)
 
     st.markdown("### Fine tune coordinates")
-    pickup_lat = st.number_input("Pickup latitude", value=float(st.session_state["pickup_point"][0]), format="%.6f")
-    pickup_lon = st.number_input("Pickup longitude", value=float(st.session_state["pickup_point"][1]), format="%.6f")
-    dropoff_lat = st.number_input("Dropoff latitude", value=float(st.session_state["dropoff_point"][0]), format="%.6f")
-    dropoff_lon = st.number_input("Dropoff longitude", value=float(st.session_state["dropoff_point"][1]), format="%.6f")
+    pickup_lat = st.number_input("Pickup latitude", value=float(st.session_state["pickup_point"][0]), format="%.6f", step=0.000001)
+    pickup_lon = st.number_input("Pickup longitude", value=float(st.session_state["pickup_point"][1]), format="%.6f", step=0.000001)
+    dropoff_lat = st.number_input("Dropoff latitude", value=float(st.session_state["dropoff_point"][0]), format="%.6f", step=0.000001)
+    dropoff_lon = st.number_input("Dropoff longitude", value=float(st.session_state["dropoff_point"][1]), format="%.6f", step=0.000001)
 
 st.session_state["pickup_point"] = (pickup_lat, pickup_lon)
 st.session_state["dropoff_point"] = (dropoff_lat, dropoff_lon)

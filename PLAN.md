@@ -11,13 +11,13 @@
 *XPrice: An Explainable AI Framework for Transparent Dynamic Pricing in Urban Ride-Hailing — A Dubai Case Study*
 
 **Core Idea:**  
-Careem's surge pricing is a black-box ML system. Riders don't know why their fare is AED 42 vs AED 18. Operations managers can't interrogate why prices spiked. This project proposes and demonstrates an XAI (Explainable AI) layer using SHAP that makes every pricing decision transparent — for both internal operators and end-users. We construct a high-fidelity synthetic "mirror dataset" of Dubai ride-hailing operations, train an ML pricing model, apply SHAP for local and global explanations, and deliver a live interactive application that simulates a "Request a Ride" experience with full price breakdowns.
+Careem's surge pricing is a black-box ML system. Riders don't know why their fare is AED 42 vs AED 18. Operations managers can't interrogate why prices spiked. This project proposes and demonstrates an XAI layer that makes every pricing decision transparent for both internal operators and end-users. We construct a high-fidelity synthetic mirror dataset of Dubai ride-hailing operations, train a coordinate-first XGBoost fare model, export tree contribution values for local and global explanations, and deliver a live interactive application that simulates a real request-a-ride experience with map-selected pickup and dropoff points.
 
 **Research Methodology:** Design Science Research (DSR) — Peffers et al. (2007)  
 Six phases: Problem Identification → Objectives → Design & Development → Demonstration → Evaluation → Communication (the paper).
 
 **Data Strategy:**  
-We construct a synthetic mirror dataset modeled on Dubai's real ride-hailing operational patterns using public knowledge (Careem Engineering Blog, e& reports, WTW 2024 MENA report, OpenWeatherMap historical data, Dubai events calendar). The paper explicitly states this is a researcher-constructed mirror dataset used to demonstrate the proposed XAI methodology — not proprietary Careem data.
+We construct a synthetic mirror dataset modeled on Dubai's real ride-hailing operational patterns using public knowledge and open tools (Careem Engineering Blog, e& reports, WTW 2024 MENA report, OpenWeatherMap historical data, Dubai events calendar, OSRM routing, optional TomTom traffic flow). The paper explicitly states this is a researcher-constructed mirror dataset used to demonstrate the proposed XAI methodology rather than proprietary Careem data.
 
 ---
 
@@ -26,16 +26,19 @@ We construct a synthetic mirror dataset modeled on Dubai's real ride-hailing ope
 ---
 
 ### PHASE 1 — Dataset Construction
-**Goal:** Build a rich, realistic Dubai ride-hailing dataset (~150,000–200,000 records
+**Goal:** Build a rich, realistic Dubai ride-hailing dataset (165,000 records, 68 columns) centered on exact pickup and dropoff coordinates rather than only neighborhood labels.
 
 #### 1.1 Define Feature Set
 
 **Spatial features (Dubai geography):**
-- `pickup_zone` / `dropoff_zone` — 12 Dubai zones: Downtown, Marina, JBR, DIFC, Deira, Bur Dubai, Jumeirah, Al Quoz, Business Bay, Dubai Hills, Airport (DXB), Sharjah Border
-- `pickup_lat` / `pickup_lon` / `dropoff_lat` / `dropoff_lon` — realistic coordinates per zone
-- `route_distance_km` — realistic road distances between zone pairs (via lookup table)
+- `pickup_lat` / `pickup_lon` / `dropoff_lat` / `dropoff_lon` — realistic coordinates per zone, jittered to simulate exact rider endpoints
+- `pickup_zone` / `dropoff_zone` — derived metadata labels for the nearest research zone centroid
+- `route_direct_distance_km` — direct great-circle distance between the two endpoints
+- `route_distance_km` — routed trip distance with OSRM-style geometry or a deterministic fallback
+- `route_efficiency_ratio` — routed distance divided by direct distance
+- `route_bearing_deg` — bearing from pickup to dropoff for directional patterns
 - `is_airport_ride` — binary flag (DXB pickup or dropoff)
-- `zone_demand_tier` — Low / Medium / High based on zone commercial density
+- `pickup_density_score` / `dropoff_density_score` — density multipliers derived from the zone profile
 
 **Temporal features:**
 - `timestamp` — full datetime across Jan–Dec 2025
@@ -61,17 +64,19 @@ We construct a synthetic mirror dataset modeled on Dubai's real ride-hailing ope
 - `weather_demand_factor` — composite weather impact on demand
 
 **Supply features:**
-- `available_captains_zone` — captains available in pickup zone at time of request
-- `captain_acceptance_rate` — zone-hour level acceptance rate
-- `product_type` — Go / Go+ / Business / Hala Taxi / eBike
-- `payment_method` — Card / Cash / Careem Pay / Careem Plus
+- `product_type` — Comfort / Executive / Premier / MAX / Kids / Electric / Hala Taxi / Hala Max
+- `payment_method` — Credit Card / Cash / Careem Pay / Careem Plus
+- `demand_index` — composite demand score combining density, weather, events, and time windows
+- `captain_availability_score` — bounded supply proxy from 0.15 to 1.00
+- `supply_pressure_index` — inverse of availability
+- `traffic_index` — route-specific congestion proxy or live-flow feature when available
 
 **Pricing features (target construction):**
-- `base_fare_aed` — product base fare (Go: AED 6, Business: AED 12)
-- `per_km_rate` — product rate per km (Go: AED 2.1, Business: AED 3.8)
-- `surge_multiplier` — calculated from demand/supply ratio (1.0–2.5x)
-- `final_price_aed` — TARGET VARIABLE (base + distance + surge + time factors)
-- `price_per_km` — derived
+- `booking_fee_aed` — booking fee by product and time band
+- `metered_fare_aed` — pre-final fare from the pricing logic
+- `surge_multiplier` — calculated from demand and supply pressure for private-hire products
+- `final_price_aed` — target variable, inclusive of route, time, toll, and congestion effects
+- `price_per_km_aed` — derived final fare per routed kilometer
 
 **Outcome features:**
 - `booking_status` — Completed / Captain Cancelled / Customer Cancelled / No Captain
@@ -86,7 +91,7 @@ demand_supply_gap = (ride_requests_zone_hour / avg_requests_zone_hour) - (captai
 ```
 
 #### 1.3 Deliverable
-- File: `data/processed/dubai_rides_2025.csv` (~150k–200k rows, 30+ features)
+- File: `data/processed/dubai_rides_2025.csv` (165k rows, 68 columns)
 - Script: `data/generate_dataset.py`
 - Documentation: `data/DATA_DICTIONARY.md`
 
@@ -117,12 +122,13 @@ Deliverable: `notebooks/02_eda.ipynb` + key figures saved to `docs/figures/`
 
 **Evaluation metrics:** RMSE, MAE, R², feature importance
 
-**Why XGBoost:** Boosted tree models are natively supported by TreeExplainer in SHAP, giving exact (not approximate) Shapley values — much faster and more reliable than KernelExplainer for neural networks.
+**Why XGBoost:** Boosted trees deliver top accuracy on the mirror dataset and support stable per-feature contribution exports through native `pred_contribs` inference in this environment, which avoids compatibility issues seen with direct `shap.TreeExplainer` usage on the current XGBoost build.
 
 **Feature engineering:**
-- One-hot encode: zone, product, payment, event type
+- Keep lat/lon, direct distance, routed distance, route efficiency, bearing, density scores, and traffic index as core numeric features
+- One-hot encode product, payment, event type, and area type metadata rather than the raw zone names
 - Cyclical encoding: hour (sin/cos), day of week (sin/cos), month (sin/cos)
-- Interaction features: is_rain × is_peak_hour, is_ramadan × hour, event × zone
+- Interaction features: peak × traffic, demand × traffic, efficiency × traffic, bearing sin/cos, and coordinate deltas
 
 **Train/test split:** 80/20 stratified by month (to test generalization across seasons)
 
@@ -134,17 +140,17 @@ Deliverables:
 ---
 
 ### PHASE 4 — XAI Layer (SHAP Analysis)
-**Goal:** Apply SHAP to the trained XGBoost model for both global and local explanations.
+**Goal:** Generate SHAP-style global and local explanations from the trained XGBoost model using native tree contribution outputs.
 
 #### 4.1 Global Explanations (Operations Manager view)
 - **SHAP summary beeswarm plot** — which features globally drive price variation
 - **SHAP bar chart** — mean absolute SHAP values (ranked feature importance)
-- **SHAP dependence plots** — how `surge_multiplier`, `hour`, `distance`, `is_rain`, `event_demand_multiplier` interact with price
-- **SHAP heatmap** — feature impact across time of day × zone
+- **SHAP dependence plots** — how `route_distance_km`, `traffic_index`, `demand_index`, `temperature_c`, and `event_demand_multiplier` interact with price
+- **SHAP heatmap** — feature impact across time of day, product, and derived zone metadata
 
 #### 4.2 Local Explanations (Individual ride — End-User view)
 - **SHAP waterfall plot** — for a single ride: base price → contribution of each feature → final price
-  - e.g., "Base: AED 12.00 | +AED 8.20 (distance 14km) | +AED 4.10 (GITEX nearby) | +AED 2.80 (peak hour) | +AED 1.50 (rain) | = AED 28.60"
+  - e.g., "Base: AED 12.00 | +AED 8.20 (route distance 14km) | +AED 4.10 (trade-show demand) | +AED 2.80 (traffic congestion) | +AED 1.50 (peak hour) | = AED 28.60"
 - **SHAP force plot** — interactive version of waterfall
 - **Natural language explanation generator** — converts SHAP values into plain English sentences for the user-facing app
 
@@ -166,28 +172,31 @@ Deliverables:
 app/
 ├── app.py                      # Entry point + navigation
 ├── pages/
-│   ├── 1_ride_simulator.py     # End-user: Request a Ride + Price Explanation
-│   ├── 2_operations_xai.py     # Ops Manager: Global SHAP Dashboard
-│   └── 3_feature_explorer.py   # Deep-dive: Dependence plots
+│   ├── 1_ride_simulator.py     # End-user: map-first ride quote + explanation
+│   ├── 2_operations_xai.py     # Ops Manager: global contribution dashboard
+│   └── 3_feature_explorer.py   # Analyst what-if lab for coordinate scenarios
 └── utils/
-    ├── model_loader.py         # Load trained XGBoost model
-    ├── shap_engine.py          # Generate SHAP values + plots
-    ├── weather_api.py          # OpenWeatherMap API integration
-    ├── geo_utils.py            # Dubai zone lookup, distance calc
-    └── nlp_explainer.py        # SHAP → natural language
+  ├── domain.py               # Scenario builder and pricing logic mirror
+  ├── routing_api.py          # OSRM route context + optional TomTom traffic
+  ├── weather_api.py          # OpenWeatherMap API integration + fallback
+  ├── geo_utils.py            # Folium map rendering and zone helpers
+  ├── model_loader.py         # Load trained XGBoost model and artefacts
+  ├── shap_engine.py          # Generate contribution values + plots
+  └── nlp_explainer.py        # Contribution summary → natural language
 ```
 
 #### Page 1 — Ride Simulator (End-User View)
-- **Map interface** (Folium embedded in Streamlit) — user clicks to set pickup and dropoff in Dubai
-- Zone auto-detected from coordinates
-- Route distance estimated from zone-pair lookup table
-- **Real-time weather** pulled from OpenWeatherMap API (Dubai, current conditions)
+- **Map interface** (Folium embedded in Streamlit) — user clicks to set exact pickup and dropoff points in Dubai
+- Derived zone labels auto-detected from coordinates for explanation and dashboard filtering
+- Route distance and geometry pulled from OSRM when available, with a deterministic fallback model
+- **Real-time weather** pulled from OpenWeatherMap API for current-day requests when configured
+- **Live traffic** optionally pulled from TomTom Flow for current-day requests when configured
 - **Active events** detected from a hardcoded 2025 events calendar
 - Time auto-filled from system clock (or user-selectable)
 - **Price estimate** generated by ML model
 - **SHAP waterfall** showing exactly what drives the price
-- **Natural language breakdown:** "Your fare is AED 31.50. The biggest factors are: distance (14km adds AED 8.20), current event (GITEX adds AED 4.10), and the time of day (peak hour adds AED 2.80). Weather is clear so no weather surcharge applies."
-- Product selector: Go / Go+ / Business / Hala
+- **Natural language breakdown:** "Your fare is AED 31.50. The biggest factors are route distance, current event demand, and traffic conditions. Weather is clear so no weather surcharge applies."
+- Product selector: Comfort / Executive / Premier / MAX / Kids / Electric / Hala Taxi / Hala Max
 
 #### Page 2 — Operations XAI Dashboard (Internal View)
 - Global SHAP beeswarm and bar chart
@@ -200,12 +209,13 @@ app/
 #### Page 3 — Feature Explorer
 - SHAP dependence plots (interactive)
 - Partial dependence plot for any selected feature
-- "What-if" simulator: change one input, see how SHAP values shift
+- Coordinate-based "what-if" simulator: change endpoints, distance, traffic, availability, or demand and see how contribution values shift
 
 #### External APIs Used
 - **OpenWeatherMap API** (free tier) — current weather for Dubai
 - **Folium** (open source) — interactive map rendering
-- **OSRM** (optional, open source) — more realistic route distance (fallback: zone-pair lookup table)
+- **OSRM** (open source) — route geometry, distance, and duration preview
+- **TomTom Flow API** (optional) — live traffic enrichment for current-day scenarios
 
 Deliverable: Fully functional Streamlit app, runnable with `streamlit run app/app.py`
 

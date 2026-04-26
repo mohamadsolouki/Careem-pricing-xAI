@@ -26,7 +26,7 @@ from utils.ui import apply_theme, hero
 from utils.weather_api import get_weather
 
 
-st.set_page_config(page_title="XPrice Feature Explorer", page_icon="AED", layout="wide")
+st.set_page_config(page_title="XPrice Feature Explorer", layout="wide")
 apply_theme()
 
 hero(
@@ -77,10 +77,10 @@ default_day = min(today.day, monthrange(2025, today.month)[1])
 default_date = date(2025, today.month, default_day)
 
 control_columns = st.columns(4)
-pickup_lat = control_columns[0].number_input("Pickup latitude", value=float(DEFAULT_PICKUP_POINT[0]), format="%.6f", key="whatif_pickup_lat")
-pickup_lon = control_columns[1].number_input("Pickup longitude", value=float(DEFAULT_PICKUP_POINT[1]), format="%.6f", key="whatif_pickup_lon")
-dropoff_lat = control_columns[2].number_input("Dropoff latitude", value=float(DEFAULT_DROPOFF_POINT[0]), format="%.6f", key="whatif_dropoff_lat")
-dropoff_lon = control_columns[3].number_input("Dropoff longitude", value=float(DEFAULT_DROPOFF_POINT[1]), format="%.6f", key="whatif_dropoff_lon")
+pickup_lat = control_columns[0].number_input("Pickup latitude", value=float(DEFAULT_PICKUP_POINT[0]), format="%.6f", step=0.000001, key="whatif_pickup_lat")
+pickup_lon = control_columns[1].number_input("Pickup longitude", value=float(DEFAULT_PICKUP_POINT[1]), format="%.6f", step=0.000001, key="whatif_pickup_lon")
+dropoff_lat = control_columns[2].number_input("Dropoff latitude", value=float(DEFAULT_DROPOFF_POINT[0]), format="%.6f", step=0.000001, key="whatif_dropoff_lat")
+dropoff_lon = control_columns[3].number_input("Dropoff longitude", value=float(DEFAULT_DROPOFF_POINT[1]), format="%.6f", step=0.000001, key="whatif_dropoff_lon")
 
 control_columns_1b = st.columns(2)
 product_type = control_columns_1b[0].selectbox("Product", PRODUCT_NAMES, index=1, key="whatif_product")
@@ -111,11 +111,11 @@ scenario_record = build_trip_record(
 )
 
 override_columns = st.columns(3)
-distance_override = override_columns[0].slider("Distance override (km)", min_value=1.0, max_value=65.0, value=float(scenario_record["route_distance_km"]), step=0.5)
-traffic_override = override_columns[1].slider("Traffic index override", min_value=0.65, max_value=2.20, value=float(scenario_record["traffic_index"]), step=0.01)
-availability_override = override_columns[2].slider("Availability override", min_value=0.15, max_value=1.0, value=float(scenario_record["captain_availability_score"]), step=0.01)
+distance_override = override_columns[0].slider("Distance override (km)", min_value=1.0, max_value=65.0, value=round(float(scenario_record["route_distance_km"]), 1), step=0.1)
+traffic_override = override_columns[1].slider("Traffic index override", min_value=0.65, max_value=2.20, value=round(float(scenario_record["traffic_index"]), 2), step=0.01)
+availability_override = override_columns[2].slider("Availability override", min_value=0.15, max_value=1.0, value=round(float(scenario_record["captain_availability_score"]), 2), step=0.01)
 
-demand_override = st.slider("Demand index override", min_value=0.75, max_value=3.0, value=float(scenario_record["demand_index"]), step=0.01)
+demand_override = st.slider("Demand index override", min_value=0.75, max_value=3.0, value=round(float(scenario_record["demand_index"]), 2), step=0.01)
 
 scenario_record["route_distance_km"] = round(distance_override, 2)
 scenario_record["traffic_index"] = round(traffic_override, 3)

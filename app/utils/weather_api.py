@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime
 
 import requests
 
+from utils.config import get_config_value
 from utils.domain import WEATHER_PROFILES, get_nearest_zone, stable_rng
 
 
@@ -38,7 +38,7 @@ def _mock_weather(lat: float, lon: float, ride_dt: datetime):
 
 
 def _live_weather(lat: float, lon: float):
-    api_key = os.getenv("OPENWEATHER_API_KEY")
+    api_key = get_config_value("OPENWEATHER_API_KEY")
     if not api_key:
         return None
 
@@ -73,7 +73,7 @@ def _live_weather(lat: float, lon: float):
 
 
 def get_weather(lat: float, lon: float, ride_dt: datetime, prefer_live: bool = True):
-    if prefer_live and os.getenv("OPENWEATHER_API_KEY") and ride_dt.date() == datetime.now().date():
+    if prefer_live and get_config_value("OPENWEATHER_API_KEY") and ride_dt.date() == datetime.now().date():
         try:
             live_weather = _live_weather(lat, lon)
             live_weather["nearest_zone"] = get_nearest_zone(lat, lon)

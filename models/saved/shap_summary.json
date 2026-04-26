@@ -1,82 +1,82 @@
 [
   {
     "feature": "route_distance_km",
-    "mean_abs_shap": 30.0065
+    "mean_abs_shap": 28.3337
   },
   {
     "feature": "is_hala_product",
-    "mean_abs_shap": 16.6408
+    "mean_abs_shap": 15.0443
   },
   {
     "feature": "salik_gates",
-    "mean_abs_shap": 6.2895
+    "mean_abs_shap": 4.2193
   },
   {
     "feature": "booking_fee_aed",
-    "mean_abs_shap": 5.1075
-  },
-  {
-    "feature": "demand_index",
-    "mean_abs_shap": 3.593
-  },
-  {
-    "feature": "trip_duration_min",
-    "mean_abs_shap": 3.2806
-  },
-  {
-    "feature": "product_type_Hala Taxi",
-    "mean_abs_shap": 3.1213
-  },
-  {
-    "feature": "product_type_MAX",
-    "mean_abs_shap": 3.0555
+    "mean_abs_shap": 3.9872
   },
   {
     "feature": "product_type_Premier",
-    "mean_abs_shap": 2.8664
+    "mean_abs_shap": 3.2206
+  },
+  {
+    "feature": "product_type_MAX",
+    "mean_abs_shap": 3.0844
+  },
+  {
+    "feature": "demand_index",
+    "mean_abs_shap": 2.9731
+  },
+  {
+    "feature": "trip_duration_min",
+    "mean_abs_shap": 2.5972
+  },
+  {
+    "feature": "route_direct_distance_km",
+    "mean_abs_shap": 2.36
+  },
+  {
+    "feature": "product_type_Hala Taxi",
+    "mean_abs_shap": 2.2216
   },
   {
     "feature": "product_type_Executive",
-    "mean_abs_shap": 1.5672
+    "mean_abs_shap": 1.541
   },
   {
     "feature": "captain_availability_score",
-    "mean_abs_shap": 1.3881
-  },
-  {
-    "feature": "pickup_zone_DXB Airport",
-    "mean_abs_shap": 0.9767
-  },
-  {
-    "feature": "product_type_Comfort",
-    "mean_abs_shap": 0.8092
+    "mean_abs_shap": 1.3863
   },
   {
     "feature": "product_type_Hala MAX",
-    "mean_abs_shap": 0.6296
-  },
-  {
-    "feature": "supply_pressure_index",
-    "mean_abs_shap": 0.5615
-  },
-  {
-    "feature": "is_peak_hour",
-    "mean_abs_shap": 0.5346
-  },
-  {
-    "feature": "pickup_lon",
-    "mean_abs_shap": 0.5092
-  },
-  {
-    "feature": "event_demand_multiplier",
-    "mean_abs_shap": 0.4574
+    "mean_abs_shap": 1.2257
   },
   {
     "feature": "salik_cost_aed",
-    "mean_abs_shap": 0.3008
+    "mean_abs_shap": 1.136
   },
   {
-    "feature": "avg_speed_kmh",
-    "mean_abs_shap": 0.2994
+    "feature": "product_type_Comfort",
+    "mean_abs_shap": 1.0357
+  },
+  {
+    "feature": "pickup_lon",
+    "mean_abs_shap": 0.9295
+  },
+  {
+    "feature": "distance_gap_km",
+    "mean_abs_shap": 0.6892
+  },
+  {
+    "feature": "event_demand_multiplier",
+    "mean_abs_shap": 0.5718
+  },
+  {
+    "feature": "supply_pressure_index",
+    "mean_abs_shap": 0.5704
+  },
+  {
+    "feature": "pickup_density_score",
+    "mean_abs_shap": 0.4214
   }
 ]

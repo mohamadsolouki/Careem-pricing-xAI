@@ -33,16 +33,26 @@ def build_picker_map(
         folium.PolyLine(route_geometry, color="#f59e0b", weight=5, opacity=0.85).add_to(map_object)
 
     if pickup_point:
-        folium.Marker(
+        folium.CircleMarker(
             location=pickup_point,
+            radius=9,
+            color="#166534",
+            weight=2,
+            fill=True,
+            fill_color="#22c55e",
+            fill_opacity=0.95,
             tooltip=f"Pickup | {get_nearest_zone(*pickup_point)}",
-            icon=folium.Icon(color="green", icon="play", prefix="fa"),
         ).add_to(map_object)
     if dropoff_point:
-        folium.Marker(
+        folium.CircleMarker(
             location=dropoff_point,
+            radius=9,
+            color="#991b1b",
+            weight=2,
+            fill=True,
+            fill_color="#ef4444",
+            fill_opacity=0.95,
             tooltip=f"Dropoff | {get_nearest_zone(*dropoff_point)}",
-            icon=folium.Icon(color="red", icon="stop", prefix="fa"),
         ).add_to(map_object)
 
     return map_object

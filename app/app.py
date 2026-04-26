@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 
@@ -17,7 +18,7 @@ from utils.model_loader import load_dataset_profile, load_metrics, load_shap_bun
 from utils.ui import apply_theme, card, hero
 
 
-st.set_page_config(page_title="XPrice", page_icon="AED", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="XPrice", layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 
 metrics = load_metrics()
@@ -78,11 +79,33 @@ bottom_left, bottom_right = st.columns(2, gap="large")
 with bottom_left:
     st.subheader("Highest-value pickup zones")
     zone_frame = profile["top_pickup_zones"].rename("avg fare").reset_index().rename(columns={"pickup_zone": "zone"})
-    st.bar_chart(zone_frame.set_index("zone"))
+    zone_chart = px.bar(
+        zone_frame,
+        x="zone",
+        y="avg fare",
+        text="avg fare",
+        title="Average completed fare by pickup zone",
+        color="avg fare",
+        color_continuous_scale="Tealgrn",
+    )
+    zone_chart.update_traces(texttemplate="AED %{y:.1f}", textposition="outside")
+    zone_chart.update_layout(height=360, margin={"l": 0, "r": 0, "t": 40, "b": 0}, coloraxis_showscale=False)
+    st.plotly_chart(zone_chart, width="stretch")
 
 with bottom_right:
     st.subheader("Premium product mix")
     product_frame = profile["top_products"].rename("avg fare").reset_index().rename(columns={"product_type": "product"})
-    st.bar_chart(product_frame.set_index("product"))
+    product_chart = px.bar(
+        product_frame,
+        x="product",
+        y="avg fare",
+        text="avg fare",
+        title="Average completed fare by product",
+        color="avg fare",
+        color_continuous_scale="Sunsetdark",
+    )
+    product_chart.update_traces(texttemplate="AED %{y:.1f}", textposition="outside")
+    product_chart.update_layout(height=360, margin={"l": 0, "r": 0, "t": 40, "b": 0}, coloraxis_showscale=False)
+    st.plotly_chart(product_chart, width="stretch")
 
 st.caption("Calendar overlays use the 2025 research season. Live weather is optional and only used when an OpenWeatherMap API key is present and the selected date is today.")

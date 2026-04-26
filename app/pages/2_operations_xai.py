@@ -19,7 +19,7 @@ from utils.shap_engine import build_top_driver_frame, plot_beeswarm, plot_depend
 from utils.ui import apply_theme, hero
 
 
-st.set_page_config(page_title="XPrice Operations Dashboard", page_icon="AED", layout="wide")
+st.set_page_config(page_title="XPrice Operations Dashboard", layout="wide")
 apply_theme()
 
 hero(
@@ -32,13 +32,14 @@ bundle = load_shap_bundle()
 sample_raw = bundle["sample_raw"].copy()
 sample_features = bundle["sample_features"].copy()
 contrib_values = bundle["values"]
+sample_raw["active_event_display"] = sample_raw["active_event"].fillna("No active event").replace({"None": "No active event"}).astype(str)
 
 with st.sidebar:
     st.markdown("### Filters")
     zone_choice = st.selectbox("Pickup zone", ["All"] + sorted(sample_raw["pickup_zone"].unique().tolist()))
     product_choice = st.selectbox("Product", ["All"] + sorted(sample_raw["product_type"].unique().tolist()))
     month_choice = st.selectbox("Month", ["All"] + sorted(sample_raw["month_name"].unique().tolist(), key=lambda item: pd.Timestamp(f"2025-{item}-01").month))
-    event_choice = st.selectbox("Event", ["All"] + sorted(sample_raw["active_event"].unique().tolist()))
+    event_choice = st.selectbox("Event", ["All"] + sorted(sample_raw["active_event_display"].unique().tolist()))
 
 mask = pd.Series(True, index=sample_raw.index)
 if zone_choice != "All":
@@ -48,7 +49,7 @@ if product_choice != "All":
 if month_choice != "All":
     mask &= sample_raw["month_name"] == month_choice
 if event_choice != "All":
-    mask &= sample_raw["active_event"] == event_choice
+    mask &= sample_raw["active_event_display"] == event_choice
 
 if not mask.any():
     st.warning("The selected filter combination returns no sampled rides. Relax one of the filters.")
@@ -134,7 +135,7 @@ with tab_time:
 
 with tab_event:
     event_frame = filtered_raw.copy()
-    event_frame["event_group"] = event_frame["active_event"].replace({"None": "No active event"})
+    event_frame["event_group"] = event_frame["active_event_display"]
     top_events = event_frame["event_group"].value_counts().head(8).index.tolist()
     event_subset = event_frame[event_frame["event_group"].isin(top_events)]
     st.plotly_chart(

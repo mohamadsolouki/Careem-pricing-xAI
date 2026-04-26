@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime
 
 import requests
 
+from utils.config import get_config_value
 from utils.domain import bearing_deg, build_fallback_route_context, classify_traffic, get_nearest_zone, haversine_km, stable_rng
 
 
@@ -30,7 +30,7 @@ def _fetch_osrm_route(pickup_lat: float, pickup_lon: float, dropoff_lat: float, 
 
 
 def _fetch_tomtom_traffic(lat: float, lon: float):
-    api_key = os.getenv("TOMTOM_API_KEY")
+    api_key = get_config_value("TOMTOM_API_KEY")
     if not api_key:
         return None
     response = requests.get(
@@ -93,7 +93,7 @@ def get_route_context(
     traffic = None
     midpoint_lat = (pickup_lat + dropoff_lat) / 2.0
     midpoint_lon = (pickup_lon + dropoff_lon) / 2.0
-    if prefer_live_traffic and os.getenv("TOMTOM_API_KEY") and ride_dt.date() == datetime.now().date():
+    if prefer_live_traffic and get_config_value("TOMTOM_API_KEY") and ride_dt.date() == datetime.now().date():
         try:
             traffic = _fetch_tomtom_traffic(midpoint_lat, midpoint_lon)
         except (requests.RequestException, ValueError):
