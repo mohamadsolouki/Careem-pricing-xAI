@@ -22,7 +22,7 @@ from utils.model_loader import load_feature_columns, load_model, load_shap_bundl
 from utils.nlp_explainer import build_explanation
 from utils.routing_api import get_route_context
 from utils.shap_engine import compute_local_contributions, plot_dependence, plot_waterfall
-from utils.ui import apply_theme, hero
+from utils.ui import apply_theme, card, hero, section_header, whatif_result
 from utils.weather_api import get_weather
 
 
@@ -32,7 +32,7 @@ apply_theme()
 hero(
     "Feature Explorer",
     "Analyst workbench",
-    "Explore one driver at a time, inspect its contribution shape, and run coordinate-based what-if scenarios that rewrite route distance, traffic intensity, and captain availability.",
+    "Explore how any single driver influences fares across the full sample. Inspect its SHAP contribution shape, plot the marginal response curve, then run a what-if scenario with custom coordinates and manual overrides for distance, traffic, and supply.",
 )
 
 model = load_model()
@@ -46,15 +46,17 @@ continuous_features = [
     for column in sample_features.columns
     if pd.api.types.is_numeric_dtype(sample_features[column]) and sample_features[column].nunique() > 12
 ]
-selected_feature = st.selectbox("Feature to explore", continuous_features, index=0)
+
+section_header("Feature to explore")
+selected_feature = st.selectbox("Select a continuous feature", continuous_features, index=0, label_visibility="collapsed")
 
 left, right = st.columns([1.1, 0.9], gap="large")
 with left:
-    st.subheader("Dependence view")
-    st.pyplot(plot_dependence(contrib_values, sample_features, selected_feature), width="stretch")
+    section_header("Dependence view")
+    st.pyplot(plot_dependence(contrib_values, sample_features, selected_feature), use_container_width=True)
 
 with right:
-    st.subheader("Partial dependence")
+    section_header("Partial dependence (marginal response)")
     baseline_row = sample_features.iloc[[0]].copy()
     low = float(sample_features[selected_feature].quantile(0.05))
     high = float(sample_features[selected_feature].quantile(0.95))
@@ -65,16 +67,41 @@ with right:
         scenario[selected_feature] = value
         predictions.append(float(model.predict(scenario)[0]))
     sweep_frame = pd.DataFrame({"feature_value": sweep_values, "predicted_price_aed": predictions})
-    sweep_chart = px.line(sweep_frame, x="feature_value", y="predicted_price_aed", markers=True, title=f"Predicted fare response to {selected_feature}")
-    sweep_chart.update_layout(height=360, margin={"l": 0, "r": 0, "t": 40, "b": 0})
-    st.plotly_chart(sweep_chart, width="stretch")
+    sweep_chart = px.line(
+        sweep_frame,
+        x="feature_value",
+        y="predicted_price_aed",
+        markers=True,
+        title=f"Predicted fare response to {selected_feature}",
+        template="plotly_white",
+    )
+    sweep_chart.update_traces(
+        line={"color": "#0d9488", "width": 2.5},
+        marker={"color": "#0d9488", "size": 6},
+    )
+    sweep_chart.update_layout(
+        height=360,
+        margin={"l": 0, "r": 0, "t": 44, "b": 0},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
+        title_font={"size": 14, "color": "#0f172a"},
+        xaxis={"gridcolor": "#f1f5f9", "title": {"text": selected_feature, "font": {"color": "#64748b"}}},
+        yaxis={"gridcolor": "#f1f5f9", "title": {"text": "Predicted fare (AED)", "font": {"color": "#64748b"}}},
+    )
+    st.plotly_chart(sweep_chart, use_container_width=True)
 
 st.divider()
-st.subheader("What-if lab")
+section_header("What-if lab")
 
 today = datetime.now()
 default_day = min(today.day, monthrange(2025, today.month)[1])
 default_date = date(2025, today.month, default_day)
+
+card(
+    "How to use the lab",
+    "Set pickup and dropoff coordinates, choose a product and time, then drag the override sliders to explore how distance, traffic, and captain availability change the predicted fare. The waterfall below shows exactly how each factor contributes.",
+)
 
 control_columns = st.columns(4)
 pickup_lat = control_columns[0].number_input("Pickup latitude", value=float(DEFAULT_PICKUP_POINT[0]), format="%.6f", step=0.000001, key="whatif_pickup_lat")
@@ -110,6 +137,8 @@ scenario_record = build_trip_record(
     route_context=route_context,
 )
 
+st.markdown("<br>", unsafe_allow_html=True)
+section_header("Manual overrides")
 override_columns = st.columns(3)
 distance_override = override_columns[0].slider("Distance override (km)", min_value=1.0, max_value=65.0, value=round(float(scenario_record["route_distance_km"]), 1), step=0.1)
 traffic_override = override_columns[1].slider("Traffic index override", min_value=0.65, max_value=2.20, value=round(float(scenario_record["traffic_index"]), 2), step=0.01)
@@ -131,21 +160,24 @@ feature_frame, _ = build_inference_frame(scenario_record, feature_columns)
 contribution_series, base_value, predicted_price = compute_local_contributions(model, feature_frame)
 explanation = build_explanation(scenario_record, contribution_series, predicted_price, base_value)
 
+st.markdown("<br>", unsafe_allow_html=True)
 lab_left, lab_right = st.columns([1.0, 1.0], gap="large")
 with lab_left:
-    st.metric("What-if predicted fare", f"AED {predicted_price:,.2f}")
+    whatif_result(predicted_price, float(scenario_record["final_price_aed"]))
     metric_row = st.columns(3)
     metric_row[0].metric("Route source", scenario_record.get("route_source", "Synthetic"))
     metric_row[1].metric("Traffic source", scenario_record.get("traffic_source", "Synthetic"))
     metric_row[2].metric("Traffic condition", scenario_record.get("traffic_condition", "Moderate"))
-    st.pyplot(plot_waterfall(contribution_series, base_value, predicted_price), width="stretch")
+    section_header("Contribution waterfall")
+    st.pyplot(plot_waterfall(contribution_series, base_value, predicted_price), use_container_width=True)
 
 with lab_right:
-    st.metric("Engine reference", f"AED {scenario_record['final_price_aed']:,.2f}")
+    section_header("Scenario explanation")
     st.caption(
-        f"Coordinate scenario: pickup ({pickup_lat:.4f}, {pickup_lon:.4f}) in {scenario_record['pickup_zone']} → dropoff ({dropoff_lat:.4f}, {dropoff_lon:.4f}) in {scenario_record['dropoff_zone']}."
+        f"Pickup ({pickup_lat:.4f}, {pickup_lon:.4f}) in **{scenario_record['pickup_zone']}** → Dropoff ({dropoff_lat:.4f}, {dropoff_lon:.4f}) in **{scenario_record['dropoff_zone']}**"
     )
-    st.write(explanation["headline"])
+    st.markdown(f"**{explanation['headline']}**")
     for sentence in explanation["sentences"]:
         st.write(sentence)
-    st.dataframe(explanation["summary_table"].head(8), width="stretch", hide_index=True)
+    section_header("Driver breakdown")
+    st.dataframe(explanation["summary_table"].head(8), use_container_width=True, hide_index=True)

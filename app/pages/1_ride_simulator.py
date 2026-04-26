@@ -21,7 +21,7 @@ from utils.model_loader import load_feature_columns, load_model
 from utils.nlp_explainer import build_explanation
 from utils.routing_api import get_route_context
 from utils.shap_engine import compute_local_contributions, plot_waterfall
-from utils.ui import apply_theme, card, hero
+from utils.ui import apply_theme, card, fare_result, hero, section_header, sidebar_brand
 from utils.weather_api import get_weather
 
 
@@ -35,7 +35,7 @@ default_date = date(2025, today.month, default_day)
 hero(
     "Ride Simulator",
     "Rider-facing quote",
-    "Click directly on the Dubai map to set pickup and dropoff points. The app then pulls a route preview, optional live traffic, weather context, and an explainable fare quote for that exact coordinate pair.",
+    "Click directly on the Dubai map to place your pickup and dropoff pins. The app fetches a route preview, optional live traffic and weather, then delivers an explainable fare quote tied to those exact coordinates.",
 )
 
 model = load_model()
@@ -49,6 +49,7 @@ if "map_click_signature" not in st.session_state:
     st.session_state["map_click_signature"] = None
 
 with st.sidebar:
+    sidebar_brand()
     st.markdown("### Build a ride")
     click_mode = st.radio("Map click mode", ["Set pickup", "Set dropoff"], horizontal=True)
     if st.button("Reset route points", use_container_width=True):
@@ -57,6 +58,7 @@ with st.sidebar:
         st.session_state["map_click_signature"] = None
         st.rerun()
 
+    st.markdown("### Trip options")
     product_type = st.selectbox("Product", PRODUCT_NAMES, index=0)
     payment_method = st.selectbox("Payment method", PAYMENT_METHODS, index=0)
     ride_date = st.date_input("Ride date", value=default_date)
@@ -64,7 +66,7 @@ with st.sidebar:
     use_live_weather = st.toggle("Use live weather when available", value=True)
     use_live_traffic = st.toggle("Use live traffic when available", value=True)
 
-    st.markdown("### Fine tune coordinates")
+    st.markdown("### Fine-tune coordinates")
     pickup_lat = st.number_input("Pickup latitude", value=float(st.session_state["pickup_point"][0]), format="%.6f", step=0.000001)
     pickup_lon = st.number_input("Pickup longitude", value=float(st.session_state["pickup_point"][1]), format="%.6f", step=0.000001)
     dropoff_lat = st.number_input("Dropoff latitude", value=float(st.session_state["dropoff_point"][0]), format="%.6f", step=0.000001)
@@ -116,12 +118,11 @@ record = build_trip_record(
 feature_frame, _ = build_inference_frame(record, feature_columns)
 contribution_series, base_value, predicted_price = compute_local_contributions(model, feature_frame)
 explanation = build_explanation(record, contribution_series, predicted_price, base_value)
-anchor_delta = predicted_price - float(record["final_price_aed"])
 
 top_left, top_right = st.columns([1.05, 0.95], gap="large")
 
 with top_left:
-    st.subheader("Route lens")
+    section_header("Route lens")
     details = st.columns(4)
     details[0].metric("Route distance", f"{record['route_distance_km']:.1f} km")
     details[1].metric("Direct distance", f"{record['route_direct_distance_km']:.1f} km")
@@ -129,19 +130,21 @@ with top_left:
     details[3].metric("Demand index", f"{record['demand_index']:.2f}")
     card(
         "Derived geography",
-        f"Pickup zone: {record['pickup_zone']} ({pickup_point[0]:.4f}, {pickup_point[1]:.4f}). Dropoff zone: {record['dropoff_zone']} ({dropoff_point[0]:.4f}, {dropoff_point[1]:.4f}). Route source: {record['route_source']}.",
+        f"<strong>Pickup zone:</strong> {record['pickup_zone']} ({pickup_point[0]:.4f}, {pickup_point[1]:.4f}) &nbsp;→&nbsp; <strong>Dropoff zone:</strong> {record['dropoff_zone']} ({dropoff_point[0]:.4f}, {dropoff_point[1]:.4f}). Route source: {record['route_source']}.",
     )
 
 with top_right:
-    st.subheader("Fare quote")
-    price_columns = st.columns(3)
-    price_columns[0].metric("Predicted fare", f"AED {predicted_price:,.2f}")
-    price_columns[1].metric("Engine anchor", f"AED {record['final_price_aed']:,.2f}")
-    price_columns[2].metric("Model vs engine", f"AED {anchor_delta:+.2f}")
+    section_header("Fare quote")
+    anchor_delta = predicted_price - float(record["final_price_aed"])
+    fare_result(
+        f"{product_type} · {record['pickup_zone']} → {record['dropoff_zone']}",
+        predicted_price,
+        sub=f"Engine anchor AED {record['final_price_aed']:,.2f} · Model vs engine: {'+'if anchor_delta>=0 else ''}{anchor_delta:.2f} AED",
+    )
 
     card(
         "Context snapshot",
-        f"Weather: {record['weather_label']} ({record['weather_source']}). Traffic: {record['traffic_condition']} ({record['traffic_source']}). Event: {record['active_event']}. Availability score: {record['captain_availability_score']:.2f}. Selected product: {record['product_type']}.",
+        f"<strong>Weather:</strong> {record['weather_label']} ({record['weather_source']}) &nbsp;·&nbsp; <strong>Traffic:</strong> {record['traffic_condition']} ({record['traffic_source']}) &nbsp;·&nbsp; <strong>Event:</strong> {record['active_event']} &nbsp;·&nbsp; <strong>Availability:</strong> {record['captain_availability_score']:.2f}",
     )
     st.markdown(f"**{explanation['headline']}**")
     for sentence in explanation["sentences"]:
@@ -150,12 +153,13 @@ with top_right:
         f"Map-derived zones: pickup {get_nearest_zone(*pickup_point)}, dropoff {get_nearest_zone(*dropoff_point)}. Traffic source falls back to a synthetic model when no live provider is configured for the selected date."
     )
 
+st.markdown("<br>", unsafe_allow_html=True)
 bottom_left, bottom_right = st.columns([1.15, 0.85], gap="large")
 with bottom_left:
-    st.subheader("Local contribution waterfall")
-    st.pyplot(plot_waterfall(contribution_series, base_value, predicted_price), width="stretch")
+    section_header("Local contribution waterfall")
+    st.pyplot(plot_waterfall(contribution_series, base_value, predicted_price), use_container_width=True)
 
 with bottom_right:
-    st.subheader("Top local drivers")
-    st.dataframe(explanation["summary_table"].head(8), width="stretch", hide_index=True)
+    section_header("Top local drivers")
+    st.dataframe(explanation["summary_table"].head(8), use_container_width=True, hide_index=True)
     st.caption("The pricing engine and the model are intentionally close because the synthetic mirror dataset is generated from explicit pricing logic and then learned back by the model. The difference is that the quote is now anchored to map-selected coordinates and route context.")
