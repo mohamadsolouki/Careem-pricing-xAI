@@ -30,7 +30,7 @@ SHAP_SUMMARY_PATH = os.path.join(SAVE_DIR, "shap_summary.json")
 
 os.makedirs(FIG_DIR, exist_ok=True)
 
-SAMPLE_SIZE = 5000
+SAMPLE_SIZE = 2000
 TOP_FEATURES = 20
 
 

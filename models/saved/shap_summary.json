@@ -1,82 +1,82 @@
 [
   {
     "feature": "route_distance_km",
-    "mean_abs_shap": 28.3337
+    "mean_abs_shap": 20.7421
   },
   {
     "feature": "is_hala_product",
-    "mean_abs_shap": 15.0443
-  },
-  {
-    "feature": "salik_gates",
-    "mean_abs_shap": 4.2193
-  },
-  {
-    "feature": "booking_fee_aed",
-    "mean_abs_shap": 3.9872
-  },
-  {
-    "feature": "product_type_Premier",
-    "mean_abs_shap": 3.2206
-  },
-  {
-    "feature": "product_type_MAX",
-    "mean_abs_shap": 3.0844
-  },
-  {
-    "feature": "demand_index",
-    "mean_abs_shap": 2.9731
-  },
-  {
-    "feature": "trip_duration_min",
-    "mean_abs_shap": 2.5972
+    "mean_abs_shap": 14.6526
   },
   {
     "feature": "route_direct_distance_km",
-    "mean_abs_shap": 2.36
+    "mean_abs_shap": 6.9657
   },
   {
-    "feature": "product_type_Hala Taxi",
-    "mean_abs_shap": 2.2216
+    "feature": "product_type_Premier",
+    "mean_abs_shap": 4.6403
   },
   {
-    "feature": "product_type_Executive",
-    "mean_abs_shap": 1.541
+    "feature": "product_type_MAX",
+    "mean_abs_shap": 4.3563
   },
   {
-    "feature": "captain_availability_score",
-    "mean_abs_shap": 1.3863
+    "feature": "demand_index",
+    "mean_abs_shap": 4.236
   },
   {
-    "feature": "product_type_Hala MAX",
-    "mean_abs_shap": 1.2257
+    "feature": "demand_x_traffic",
+    "mean_abs_shap": 3.2566
   },
   {
-    "feature": "salik_cost_aed",
-    "mean_abs_shap": 1.136
-  },
-  {
-    "feature": "product_type_Comfort",
-    "mean_abs_shap": 1.0357
-  },
-  {
-    "feature": "pickup_lon",
-    "mean_abs_shap": 0.9295
+    "feature": "salik_gates",
+    "mean_abs_shap": 2.7807
   },
   {
     "feature": "distance_gap_km",
-    "mean_abs_shap": 0.6892
+    "mean_abs_shap": 2.2306
   },
   {
-    "feature": "event_demand_multiplier",
-    "mean_abs_shap": 0.5718
+    "feature": "product_type_Executive",
+    "mean_abs_shap": 2.1706
   },
   {
-    "feature": "supply_pressure_index",
-    "mean_abs_shap": 0.5704
+    "feature": "product_type_Hala Taxi",
+    "mean_abs_shap": 1.8891
   },
   {
-    "feature": "pickup_density_score",
-    "mean_abs_shap": 0.4214
+    "feature": "product_type_Comfort",
+    "mean_abs_shap": 1.8414
+  },
+  {
+    "feature": "product_type_Hala MAX",
+    "mean_abs_shap": 1.567
+  },
+  {
+    "feature": "lon_delta",
+    "mean_abs_shap": 0.9457
+  },
+  {
+    "feature": "is_airport_ride",
+    "mean_abs_shap": 0.8335
+  },
+  {
+    "feature": "lat_delta",
+    "mean_abs_shap": 0.7517
+  },
+  {
+    "feature": "product_type_Eco Friendly",
+    "mean_abs_shap": 0.6763
+  },
+  {
+    "feature": "is_careem_plus",
+    "mean_abs_shap": 0.4096
+  },
+  {
+    "feature": "is_peak_hour",
+    "mean_abs_shap": 0.3945
+  },
+  {
+    "feature": "is_late_night",
+    "mean_abs_shap": 0.3344
   }
 ]

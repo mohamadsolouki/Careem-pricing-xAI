@@ -1,18 +1,18 @@
 {
   "train": {
-    "rmse": 0.7997,
-    "mae": 0.5457,
-    "r2": 0.9998,
-    "mape": 0.7127
+    "rmse": 4.4172,
+    "mae": 2.7651,
+    "r2": 0.9926,
+    "mape": 3.0175
   },
   "test": {
-    "rmse": 1.3611,
-    "mae": 0.7428,
-    "r2": 0.9994,
-    "mape": 0.8697
+    "rmse": 5.5101,
+    "mae": 3.2131,
+    "r2": 0.9883,
+    "mape": 3.3462
   },
-  "n_features": 83,
-  "n_train": 119760,
-  "n_test": 29940,
-  "best_iteration": 799
+  "n_features": 76,
+  "n_train": 119970,
+  "n_test": 29993,
+  "best_iteration": 411
 }

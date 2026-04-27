@@ -1,30 +1,19 @@
 """
-XPrice — Dubai Ride-Hailing Mirror Dataset Generator v2.0
-=========================================================
+XPrice — Dubai Ride-Hailing Mirror Dataset Generator v3.0
+==========================================================
 Generates ~165,000 realistic Dubai ride records for 2025.
 
-Pricing model calibrated to RTA's November 2025 dynamic fare structure:
-  Hala products (RTA-regulated taxis):
-    - Flagfall AED 5.00 (peak/day) | AED 5.50 (night)
-    - Airport pickup flagfall: AED 25 (replaces flagfall + booking fee)
-    - Dynamic booking fee: AED 7.50 (peak) | AED 4.00 (off-peak/night)
-    - Per-km: AED 2.20 (adjusts +/-AED 0.06 monthly with fuel index)
-    - Waiting (stationary): AED 0.50/min
-    - Minimum fare: AED 13 (app-booked)
-  Private hire products (Careem-set rates):
-    - Base fare + booking fee + per-km + per-min (full trip duration)
-    - Careem surge multiplier on demand-supply imbalance
-  All products:
-    - Salik toll: AED 4.00 per gate crossed
-  Peak hours (Mon-Thu): 08:00-10:00 and 16:00-20:00
-  Peak hours (Fri):     16:00-24:00
-  Night:                22:00-06:00
-  Off-peak:             all other hours
+Key improvements over v2:
+  • 20 pricing zones derived from official Dubai GeoJSON boundaries
+  • Real road distances from OSRM zone-centroid matrix (no more hardcoded values)
+  • Location-aware event demand: multiplier decays with distance from event venue
+  • Unified traffic / captain-availability formulas (shared with app inference)
+  • Careem Plus 5% loyalty discount applied to private-hire fares
+  • Monthly fuel-index variation on per-km rate (±AED 0.06 as per RTA policy)
+  • Realistic pricing noise (~2.5%) so R² stays meaningful (~0.85-0.90)
+  • Salik gate counts from zone_config.py (same as app)
 
-Sources:
-  RTA dynamic taxi fare update (Gulf News, Nov 2025)
-  Careem Engineering Blog - YODA ML platform (2020)
-  e& FY2025 Annual Report | WTW 2024 MENA Rideshare Report
+Pricing model calibrated to RTA November 2025 dynamic fare structure.
 """
 
 import os, sys, json, warnings
@@ -35,189 +24,120 @@ from datetime import datetime, timedelta
 warnings.filterwarnings("ignore")
 np.random.seed(42)
 
+# ── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_PATH = os.path.join(BASE_DIR, "data", "processed", "dubai_rides_2025.csv")
+sys.path.insert(0, BASE_DIR)
+
+from zone_config import (
+    ZONE_META, ZONE_NAMES, SALIK,
+    get_zone_for_point, get_salik,
+)
+
+OUT_PATH  = os.path.join(BASE_DIR, "data", "processed", "dubai_rides_2025.csv")
+DIST_PATH = os.path.join(BASE_DIR, "data", "processed", "zone_distances.json")
 os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
 
 N_RIDES = 165_000
 
-# ── 1. Dubai zones ──────────────────────────────────────────────────────────
-ZONES = {
-    "Downtown":      {"lat": 25.1972, "lon": 55.2744, "tier": "High",   "dmult": 1.25},
-    "Marina":        {"lat": 25.0805, "lon": 55.1403, "tier": "High",   "dmult": 1.20},
-    "JBR":           {"lat": 25.0774, "lon": 55.1302, "tier": "High",   "dmult": 1.15},
-    "DIFC":          {"lat": 25.2118, "lon": 55.2797, "tier": "High",   "dmult": 1.30},
-    "Deira":         {"lat": 25.2697, "lon": 55.3095, "tier": "Medium", "dmult": 1.05},
-    "Bur Dubai":     {"lat": 25.2532, "lon": 55.2956, "tier": "Medium", "dmult": 1.05},
-    "Jumeirah":      {"lat": 25.2048, "lon": 55.2434, "tier": "Medium", "dmult": 1.10},
-    "Al Quoz":       {"lat": 25.1521, "lon": 55.2270, "tier": "Low",    "dmult": 0.90},
-    "Business Bay":  {"lat": 25.1867, "lon": 55.2622, "tier": "High",   "dmult": 1.20},
-    "Dubai Hills":   {"lat": 25.1150, "lon": 55.2380, "tier": "Medium", "dmult": 1.00},
-    "DXB Airport":   {"lat": 25.2532, "lon": 55.3657, "tier": "High",   "dmult": 1.05},
-    "Sharjah":       {"lat": 25.3463, "lon": 55.4209, "tier": "Low",    "dmult": 0.95},
-}
-ZONE_NAMES = list(ZONES.keys())
-Z_LAT  = np.array([ZONES[z]["lat"]   for z in ZONE_NAMES])
-Z_LON  = np.array([ZONES[z]["lon"]   for z in ZONE_NAMES])
-Z_TIER = [ZONES[z]["tier"]  for z in ZONE_NAMES]
-Z_DM   = np.array([ZONES[z]["dmult"] for z in ZONE_NAMES])
+# ── Zone arrays ───────────────────────────────────────────────────────────────
+Z_LAT  = np.array([ZONE_META[z]["lat"]   for z in ZONE_NAMES])
+Z_LON  = np.array([ZONE_META[z]["lon"]   for z in ZONE_NAMES])
+Z_TIER = [ZONE_META[z]["tier"]  for z in ZONE_NAMES]
+Z_DM   = np.array([ZONE_META[z]["dmult"] for z in ZONE_NAMES])
+N_ZONES = len(ZONE_NAMES)
+ZONE_IDX = {z: i for i, z in enumerate(ZONE_NAMES)}
 
-# ── 2. Zone-pair road distances (km) ────────────────────────────────────────
-DIST_MATRIX = {
-    ("Downtown",    "Marina"):       24.0,
-    ("Downtown",    "JBR"):          26.0,
-    ("Downtown",    "DIFC"):          2.5,
-    ("Downtown",    "Deira"):         8.0,
-    ("Downtown",    "Bur Dubai"):     5.0,
-    ("Downtown",    "Jumeirah"):      9.0,
-    ("Downtown",    "Al Quoz"):      10.0,
-    ("Downtown",    "Business Bay"):  3.5,
-    ("Downtown",    "Dubai Hills"):  18.0,
-    ("Downtown",    "DXB Airport"):  14.0,
-    ("Downtown",    "Sharjah"):      25.0,
-    ("Marina",      "JBR"):           2.5,
-    ("Marina",      "DIFC"):         22.0,
-    ("Marina",      "Deira"):        34.0,
-    ("Marina",      "Bur Dubai"):    30.0,
-    ("Marina",      "Jumeirah"):     17.0,
-    ("Marina",      "Al Quoz"):      15.0,
-    ("Marina",      "Business Bay"): 23.0,
-    ("Marina",      "Dubai Hills"):  18.0,
-    ("Marina",      "DXB Airport"):  38.0,
-    ("Marina",      "Sharjah"):      50.0,
-    ("JBR",         "DIFC"):         24.0,
-    ("JBR",         "Deira"):        36.0,
-    ("JBR",         "Bur Dubai"):    32.0,
-    ("JBR",         "Jumeirah"):     17.0,
-    ("JBR",         "Al Quoz"):      16.0,
-    ("JBR",         "Business Bay"): 25.0,
-    ("JBR",         "Dubai Hills"):  20.0,
-    ("JBR",         "DXB Airport"):  40.0,
-    ("JBR",         "Sharjah"):      52.0,
-    ("DIFC",        "Deira"):        10.0,
-    ("DIFC",        "Bur Dubai"):     6.0,
-    ("DIFC",        "Jumeirah"):     10.0,
-    ("DIFC",        "Al Quoz"):      10.0,
-    ("DIFC",        "Business Bay"):  2.5,
-    ("DIFC",        "Dubai Hills"):  16.0,
-    ("DIFC",        "DXB Airport"):  15.0,
-    ("DIFC",        "Sharjah"):      27.0,
-    ("Deira",       "Bur Dubai"):     4.5,
-    ("Deira",       "Jumeirah"):     16.0,
-    ("Deira",       "Al Quoz"):      20.0,
-    ("Deira",       "Business Bay"): 12.0,
-    ("Deira",       "Dubai Hills"):  28.0,
-    ("Deira",       "DXB Airport"):   7.0,
-    ("Deira",       "Sharjah"):      18.0,
-    ("Bur Dubai",   "Jumeirah"):     13.0,
-    ("Bur Dubai",   "Al Quoz"):      14.0,
-    ("Bur Dubai",   "Business Bay"):  7.0,
-    ("Bur Dubai",   "Dubai Hills"):  23.0,
-    ("Bur Dubai",   "DXB Airport"):  12.0,
-    ("Bur Dubai",   "Sharjah"):      23.0,
-    ("Jumeirah",    "Al Quoz"):       8.0,
-    ("Jumeirah",    "Business Bay"):  9.0,
-    ("Jumeirah",    "Dubai Hills"):  16.0,
-    ("Jumeirah",    "DXB Airport"):  22.0,
-    ("Jumeirah",    "Sharjah"):      37.0,
-    ("Al Quoz",     "Business Bay"):  9.0,
-    ("Al Quoz",     "Dubai Hills"):  12.0,
-    ("Al Quoz",     "DXB Airport"):  22.0,
-    ("Al Quoz",     "Sharjah"):      38.0,
-    ("Business Bay","Dubai Hills"):  14.0,
-    ("Business Bay","DXB Airport"):  16.0,
-    ("Business Bay","Sharjah"):      28.0,
-    ("Dubai Hills", "DXB Airport"):  28.0,
-    ("Dubai Hills", "Sharjah"):      42.0,
-    ("DXB Airport", "Sharjah"):      22.0,
-}
+# ── Load OSRM distance matrix ─────────────────────────────────────────────────
+with open(DIST_PATH) as f:
+    _DIST_JSON = json.load(f)
 
-def get_dist_arr(pu_arr, do_arr):
-    out = np.zeros(len(pu_arr))
-    for i in range(len(pu_arr)):
-        a, b = pu_arr[i], do_arr[i]
-        if a == b:
-            out[i] = np.random.uniform(1.5, 4.5)
-        else:
-            key = (a, b) if (a, b) in DIST_MATRIX else (b, a)
-            base = DIST_MATRIX.get(key, 15.0)
-            out[i] = base * np.random.uniform(0.90, 1.10)
-    return out
+def _osrm_dist(a: str, b: str) -> float:
+    key = f"{a}|{b}"
+    rev = f"{b}|{a}"
+    entry = _DIST_JSON.get(key) or _DIST_JSON.get(rev)
+    if entry:
+        return float(entry["distance_km"])
+    # graceful fallback: haversine × 1.35
+    la, loa = ZONE_META[a]["lat"], ZONE_META[a]["lon"]
+    lb, lob = ZONE_META[b]["lat"], ZONE_META[b]["lon"]
+    dlat = np.deg2rad(lb - la); dlon = np.deg2rad(lob - loa)
+    aa = np.sin(dlat/2)**2 + np.cos(np.deg2rad(la))*np.cos(np.deg2rad(lb))*np.sin(dlon/2)**2
+    return float(6371 * 2 * np.arctan2(np.sqrt(aa), np.sqrt(1-aa))) * 1.35
+
+def _osrm_dur(a: str, b: str) -> float:
+    key = f"{a}|{b}"
+    rev = f"{b}|{a}"
+    entry = _DIST_JSON.get(key) or _DIST_JSON.get(rev)
+    return float(entry["duration_min"]) if entry else None
+
+
+# ── Precompute zone-pair matrices ─────────────────────────────────────────────
+DIST_MATRIX_NP  = np.zeros((N_ZONES, N_ZONES))
+DUR_MATRIX_NP   = np.zeros((N_ZONES, N_ZONES))
+SALIK_MATRIX_NP = np.zeros((N_ZONES, N_ZONES), dtype=int)
+for i, a in enumerate(ZONE_NAMES):
+    for j, b in enumerate(ZONE_NAMES):
+        if i != j:
+            DIST_MATRIX_NP[i, j] = _osrm_dist(a, b)
+            d = _osrm_dur(a, b)
+            DUR_MATRIX_NP[i, j]  = d if d else (DIST_MATRIX_NP[i, j] / 40.0 * 60)
+            SALIK_MATRIX_NP[i, j] = get_salik(a, b)
+
+
+def get_dist_arr(pu_idx: np.ndarray, do_idx: np.ndarray) -> np.ndarray:
+    """Vectorised: zone-pair road distance + within-zone scatter."""
+    base = DIST_MATRIX_NP[pu_idx, do_idx]
+    intra = (pu_idx == do_idx)
+    noise = np.where(
+        intra,
+        np.random.uniform(1.2, 4.8, len(pu_idx)),
+        base * np.random.uniform(0.93, 1.08, len(pu_idx)),
+    )
+    return np.maximum(noise, 0.5)
 
 
 def haversine_arr(lat1, lon1, lat2, lon2):
-    radius_km = 6371.0
-    phi1 = np.deg2rad(lat1)
-    phi2 = np.deg2rad(lat2)
-    dphi = np.deg2rad(lat2 - lat1)
-    dlambda = np.deg2rad(lon2 - lon1)
-    a = np.sin(dphi / 2.0) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(dlambda / 2.0) ** 2
-    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-    return radius_km * c
+    r = 6371.0
+    p1 = np.deg2rad(lat1); p2 = np.deg2rad(lat2)
+    dp = np.deg2rad(lat2 - lat1); dl = np.deg2rad(lon2 - lon1)
+    a  = np.sin(dp/2)**2 + np.cos(p1)*np.cos(p2)*np.sin(dl/2)**2
+    return r * 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
 
 
 def bearing_arr(lat1, lon1, lat2, lon2):
-    phi1 = np.deg2rad(lat1)
-    phi2 = np.deg2rad(lat2)
-    dlambda = np.deg2rad(lon2 - lon1)
-    y = np.sin(dlambda) * np.cos(phi2)
-    x = np.cos(phi1) * np.sin(phi2) - np.sin(phi1) * np.cos(phi2) * np.cos(dlambda)
-    theta = np.arctan2(y, x)
-    return (np.rad2deg(theta) + 360.0) % 360.0
+    p1 = np.deg2rad(lat1); p2 = np.deg2rad(lat2)
+    dl = np.deg2rad(lon2 - lon1)
+    y = np.sin(dl)*np.cos(p2)
+    x = np.cos(p1)*np.sin(p2) - np.sin(p1)*np.cos(p2)*np.cos(dl)
+    return (np.rad2deg(np.arctan2(y, x)) + 360) % 360
 
-# ── 3. Salik gates per zone pair ────────────────────────────────────────────
-SALIK = {
-    ("Marina",      "Downtown"):    2, ("Marina",      "DIFC"):        2,
-    ("Marina",      "Business Bay"):2, ("Marina",      "Deira"):       3,
-    ("Marina",      "Bur Dubai"):   2, ("Marina",      "DXB Airport"): 3,
-    ("Marina",      "Sharjah"):     3, ("JBR",         "Downtown"):    2,
-    ("JBR",         "DIFC"):        2, ("JBR",         "Business Bay"):2,
-    ("JBR",         "Deira"):       3, ("JBR",         "DXB Airport"): 3,
-    ("JBR",         "Sharjah"):     3, ("Al Quoz",     "Deira"):       2,
-    ("Al Quoz",     "DXB Airport"): 2, ("Al Quoz",     "Sharjah"):     2,
-    ("Dubai Hills", "Deira"):       2, ("Dubai Hills", "DXB Airport"): 2,
-    ("Dubai Hills", "Sharjah"):     3, ("DIFC",        "DXB Airport"): 1,
-    ("DIFC",        "Sharjah"):     2, ("Downtown",    "DXB Airport"): 1,
-    ("Downtown",    "Sharjah"):     2, ("Deira",       "Marina"):      3,
-    ("Deira",       "JBR"):         3, ("Bur Dubai",   "Marina"):      2,
-    ("Bur Dubai",   "JBR"):         2, ("DXB Airport", "Marina"):      3,
-    ("DXB Airport", "JBR"):         3, ("DXB Airport", "Dubai Hills"): 2,
-    ("Sharjah",     "Marina"):      3, ("Sharjah",     "JBR"):         3,
-    ("Sharjah",     "Dubai Hills"): 3,
-}
-def get_salik_arr(pu_arr, do_arr):
-    out = np.zeros(len(pu_arr), dtype=int)
-    for i in range(len(pu_arr)):
-        a, b = pu_arr[i], do_arr[i]
-        out[i] = SALIK.get((a, b), SALIK.get((b, a), 0))
-    return out
 
-# ── 4. Events calendar 2025 ─────────────────────────────────────────────────
+# ── Events calendar 2025 with venue zone ─────────────────────────────────────
 EVENTS = [
     {"name": "Dubai Shopping Festival", "type": "Shopping Festival",
-     "start": "2025-01-03", "end": "2025-02-01", "dmult": 1.35},
+     "start": "2025-01-03", "end": "2025-02-01",  "dmult": 1.35, "venue_zone": "Deira"},
     {"name": "Dubai Food Festival",     "type": "Food Festival",
-     "start": "2025-02-20", "end": "2025-03-08", "dmult": 1.20},
+     "start": "2025-02-20", "end": "2025-03-08",  "dmult": 1.20, "venue_zone": "Jumeirah"},
     {"name": "Art Dubai",               "type": "Art/Culture",
-     "start": "2025-03-18", "end": "2025-03-23", "dmult": 1.25},
+     "start": "2025-03-18", "end": "2025-03-23",  "dmult": 1.25, "venue_zone": "DIFC"},
     {"name": "Dubai World Cup",         "type": "Sports Event",
-     "start": "2025-03-29", "end": "2025-03-29", "dmult": 1.55},
+     "start": "2025-03-29", "end": "2025-03-29",  "dmult": 1.55, "venue_zone": "Mirdif"},
     {"name": "Eid Al Fitr",             "type": "Religious Holiday",
-     "start": "2025-03-30", "end": "2025-04-02", "dmult": 1.30},
+     "start": "2025-03-30", "end": "2025-04-02",  "dmult": 1.30, "venue_zone": None},
     {"name": "Formula 1 Weekend",       "type": "Sports Event",
-     "start": "2025-04-04", "end": "2025-04-06", "dmult": 1.50},
+     "start": "2025-04-04", "end": "2025-04-06",  "dmult": 1.50, "venue_zone": "Yas Island"},
     {"name": "Eid Al Adha",             "type": "Religious Holiday",
-     "start": "2025-06-05", "end": "2025-06-09", "dmult": 1.25},
+     "start": "2025-06-05", "end": "2025-06-09",  "dmult": 1.25, "venue_zone": None},
     {"name": "GITEX Global",            "type": "Tech Conference",
-     "start": "2025-10-13", "end": "2025-10-17", "dmult": 1.45},
+     "start": "2025-10-13", "end": "2025-10-17",  "dmult": 1.45, "venue_zone": "DIFC"},
     {"name": "Diwali",                  "type": "Cultural Event",
-     "start": "2025-10-20", "end": "2025-10-21", "dmult": 1.20},
+     "start": "2025-10-20", "end": "2025-10-21",  "dmult": 1.20, "venue_zone": "Bur Dubai"},
     {"name": "Dubai Airshow",           "type": "Trade Show",
-     "start": "2025-11-17", "end": "2025-11-21", "dmult": 1.40},
+     "start": "2025-11-17", "end": "2025-11-21",  "dmult": 1.40, "venue_zone": "Dubai South"},
     {"name": "UAE National Day",        "type": "National Holiday",
-     "start": "2025-12-02", "end": "2025-12-03", "dmult": 1.35},
+     "start": "2025-12-02", "end": "2025-12-03",  "dmult": 1.35, "venue_zone": None},
     {"name": "NYE Burj Khalifa",        "type": "New Year Event",
-     "start": "2025-12-31", "end": "2025-12-31", "dmult": 2.20},
+     "start": "2025-12-31", "end": "2025-12-31",  "dmult": 2.20, "venue_zone": "Downtown"},
 ]
 RAMADAN_START = pd.Timestamp("2025-03-01")
 RAMADAN_END   = pd.Timestamp("2025-03-29")
@@ -227,9 +147,40 @@ UAE_HOLIDAYS = {
     "2025-06-26","2025-09-04","2025-12-02","2025-12-03",
 }
 
-# ── 5. Products ─────────────────────────────────────────────────────────────
-# Columns: base_day, base_night, per_km, per_min, min_fare,
-#          book_peak, book_offpeak, book_night, is_hala(0/1), sh_reg, sh_apt
+# Precompute zone-pair haversine distance matrix (for event decay)
+_ZONE_HAVERSINE = np.zeros((N_ZONES, N_ZONES))
+for i, a in enumerate(ZONE_NAMES):
+    for j, b in enumerate(ZONE_NAMES):
+        _ZONE_HAVERSINE[i, j] = haversine_arr(
+            ZONE_META[a]["lat"], ZONE_META[a]["lon"],
+            ZONE_META[b]["lat"], ZONE_META[b]["lon"],
+        )
+
+
+def event_multiplier_for_zone(ev: dict, zone: str) -> float:
+    """Location-aware: multiplier decays with km from event venue."""
+    venue = ev.get("venue_zone")
+    if venue is None:
+        return ev["dmult"]   # city-wide (Eid, National Day)
+    if venue not in ZONE_IDX:
+        return 1.0 + 0.3 * (ev["dmult"] - 1.0)  # off-map venue: mild city effect
+    vi = ZONE_IDX[venue]
+    zi = ZONE_IDX.get(zone)
+    if zi is None:
+        return 1.0
+    dist = float(_ZONE_HAVERSINE[vi, zi])
+    if dist < 3:
+        decay = 1.00
+    elif dist < 8:
+        decay = 0.75
+    elif dist < 18:
+        decay = 0.40
+    else:
+        decay = 0.10
+    return 1.0 + decay * (ev["dmult"] - 1.0)
+
+
+# ── Products ──────────────────────────────────────────────────────────────────
 PROD_DEF = {
     "Comfort":      (5.00, 5.50, 2.50, 0.40, 15, 5.00, 3.00, 2.50, 0, 0.18, 0.05),
     "Executive":    (5.00, 5.50, 3.20, 0.55, 18, 6.00, 4.00, 3.50, 0, 0.10, 0.08),
@@ -243,14 +194,20 @@ PROD_DEF = {
     "Hala MAX":     (5.00, 5.50, 2.80, 0.60, 20, 8.00, 5.50, 5.00, 1, 0.13, 0.20),
 }
 PROD_NAMES = list(PROD_DEF.keys())
-PD = np.array([list(v) for v in PROD_DEF.values()])   # shape (10, 11)
+PD = np.array([list(v) for v in PROD_DEF.values()])
 I_BDAY, I_BNGT, I_PKM, I_PMIN, I_MINF = 0, 1, 2, 3, 4
 I_BKPK, I_BKOF, I_BKNT, I_HALA        = 5, 6, 7, 8
 I_SHREG, I_SHAPT                        = 9, 10
 SH_REG = PD[:, I_SHREG] / PD[:, I_SHREG].sum()
 SH_APT = PD[:, I_SHAPT] / PD[:, I_SHAPT].sum()
 
-# ── 6. Demand profiles ──────────────────────────────────────────────────────
+# Monthly fuel-index variation on per-km rate (±0.06 AED, as per RTA policy)
+FUEL_INDEX = np.array([
+    0.00, -0.01, -0.02, -0.03, +0.01, +0.04,
+    +0.06, +0.05, +0.03, +0.00, -0.02, -0.01,
+])   # index by month-1
+
+# ── Demand profiles ───────────────────────────────────────────────────────────
 H_REG = np.array([
     0.30, 0.18, 0.12, 0.10, 0.12, 0.22,
     0.55, 0.90, 1.00, 0.85, 0.68, 0.62,
@@ -268,7 +225,7 @@ H_REG /= H_REG.sum(); H_RAM /= H_RAM.sum()
 MONTH_VOL = np.array([1.10, 1.05, 1.00, 0.90, 0.82, 0.72,
                        0.70, 0.72, 0.85, 1.00, 1.10, 1.12])
 
-# ── 7. Weather by month ─────────────────────────────────────────────────────
+# ── Weather by month ──────────────────────────────────────────────────────────
 WEATHER = {
     1:  {"temp":(20,25),"hum":(60,75),"rain_p":0.045,"storm_p":0.010},
     2:  {"temp":(21,27),"hum":(55,72),"rain_p":0.035,"storm_p":0.008},
@@ -286,107 +243,128 @@ WEATHER = {
 PAY_METHODS = ["Credit Card","Cash","Careem Pay","Careem Plus"]
 PAY_PROBS   = [0.42, 0.30, 0.18, 0.10]
 
-ZONE_PICK_W = np.array([1.8,1.6,1.3,1.5,1.2,1.1,1.0,0.7,1.4,0.8,1.0,0.9])
+# Zone pickup weights (higher = more pickup demand)
+ZONE_PICK_W = np.array([
+    1.80,  # Downtown
+    1.50,  # Business Bay
+    1.40,  # DIFC
+    1.20,  # Bur Dubai
+    1.20,  # Deira
+    1.10,  # Jumeirah
+    1.00,  # Al Barsha
+    0.70,  # Al Quoz
+    1.60,  # Marina
+    1.10,  # Palm Jumeirah
+    1.20,  # DXB Airport
+    0.80,  # Al Nahda
+    0.85,  # Mirdif
+    0.65,  # Silicon Oasis
+    0.90,  # Dubai Hills
+    0.75,  # JVC
+    0.50,  # Jebel Ali
+    0.35,  # Dubai South
+    0.55,  # Ras Al Khor
+    0.70,  # Sharjah
+])
 ZONE_PICK_W_APT = ZONE_PICK_W.copy()
 ZONE_PICK_W_APT[ZONE_NAMES.index("DXB Airport")] *= 2.0
 ZONE_PICK_W_APT /= ZONE_PICK_W_APT.sum()
 ZONE_PICK_W     /= ZONE_PICK_W.sum()
 
-# ── 8. Timestamps ───────────────────────────────────────────────────────────
+# ── 1. Timestamps ─────────────────────────────────────────────────────────────
 print("Sampling timestamps...")
-year_start = pd.Timestamp("2025-01-01")
-month_ends = [31,59,90,120,151,181,212,243,273,304,334,365]
+year_start  = pd.Timestamp("2025-01-01")
+month_ends  = [31,59,90,120,151,181,212,243,273,304,334,365]
 day_weights = np.zeros(365)
 for m in range(12):
     ds = 0 if m==0 else month_ends[m-1]
-    de = month_ends[m]
-    day_weights[ds:de] = MONTH_VOL[m]
+    day_weights[ds:month_ends[m]] = MONTH_VOL[m]
 day_weights /= day_weights.sum()
 
-day_of_year = np.random.choice(365, size=N_RIDES, p=day_weights)
+day_of_year  = np.random.choice(365, size=N_RIDES, p=day_weights)
 timestamps_d = year_start + pd.to_timedelta(day_of_year, unit="D")
-months = timestamps_d.month.values
+months       = timestamps_d.month.values
 
-# Ramadan mask
 is_ram_day = (timestamps_d >= RAMADAN_START) & (timestamps_d <= RAMADAN_END)
-
-# Vectorized hour sampling
 hour_choice = np.zeros(N_RIDES, dtype=int)
-ram_idx = np.where(is_ram_day)[0]
-reg_idx = np.where(~is_ram_day)[0]
+ram_idx = np.where(is_ram_day)[0]; reg_idx = np.where(~is_ram_day)[0]
 hour_choice[ram_idx] = np.random.choice(24, size=len(ram_idx), p=H_RAM)
 hour_choice[reg_idx] = np.random.choice(24, size=len(reg_idx), p=H_REG)
-minutes = np.random.randint(0, 60, N_RIDES)
-
+minutes    = np.random.randint(0, 60, N_RIDES)
 timestamps = (
     timestamps_d
     + pd.to_timedelta(hour_choice.astype(int), unit="h")
     + pd.to_timedelta(minutes, unit="m")
 )
 
-# ── 9. Temporal flags ───────────────────────────────────────────────────────
-dow = timestamps.dayofweek.values          # 0=Mon, 4=Fri, 5=Sat, 6=Sun
-is_fri = (dow == 4); is_sat = (dow == 5)
-is_weekend_uae = is_fri | is_sat
-
-# RTA peak definition
-is_peak = np.where(
-    is_fri,
-    hour_choice >= 16,
-    ((hour_choice >= 8) & (hour_choice < 10)) | ((hour_choice >= 16) & (hour_choice < 20))
-)
-is_night  = (hour_choice >= 22) | (hour_choice < 6)
-is_offpk  = (~is_peak) & (~is_night)
-
+# ── 2. Temporal flags ─────────────────────────────────────────────────────────
+dow        = timestamps.dayofweek.values
+# UAE work week: Mon–Fri (0–4). Weekend: Saturday=5, Sunday=6
+is_sat     = (dow == 5); is_sun = (dow == 6)
+is_weekend = is_sat | is_sun
+is_peak    = ((hour_choice >= 8) & (hour_choice < 10)) | ((hour_choice >= 16) & (hour_choice < 20))
+is_night   = (hour_choice >= 22) | (hour_choice < 6)
+is_offpk   = (~is_peak) & (~is_night)
 is_ramadan = np.asarray(is_ram_day)
 is_suhoor  = is_ramadan & ((hour_choice >= 1) & (hour_choice <= 3))
 is_iftar   = is_ramadan & (hour_choice == 17)
 date_strs  = timestamps.strftime("%Y-%m-%d")
 is_holiday = np.array([d in UAE_HOLIDAYS for d in date_strs])
 
-# ── 10. Events ──────────────────────────────────────────────────────────────
+# ── 3. Events (location-aware) ────────────────────────────────────────────────
+print("Computing location-aware event multipliers...")
 active_event = np.full(N_RIDES, "None", dtype=object)
 event_type   = np.full(N_RIDES, "None", dtype=object)
 event_dmult  = np.ones(N_RIDES)
-for ev in EVENTS:
-    mask = (timestamps_d >= pd.Timestamp(ev["start"])) & (timestamps_d <= pd.Timestamp(ev["end"]))
-    active_event[mask] = ev["name"]
-    event_type[mask]   = ev["type"]
-    event_dmult[mask] *= ev["dmult"]
 
-# ── 11. Zones ───────────────────────────────────────────────────────────────
+# ── 4. Zones ──────────────────────────────────────────────────────────────────
 print("Sampling zones...")
-pu_idx = np.random.choice(len(ZONE_NAMES), size=N_RIDES, p=ZONE_PICK_W_APT)
-# Dropoff: weighted over all zones except pickup (vectorised — 12 loops, not 165k)
-COND_DO = np.zeros((len(ZONE_NAMES), len(ZONE_NAMES)))
-for _p in range(len(ZONE_NAMES)):
+pu_idx = np.random.choice(N_ZONES, size=N_RIDES, p=ZONE_PICK_W_APT)
+COND_DO = np.zeros((N_ZONES, N_ZONES))
+for _p in range(N_ZONES):
     _pr = ZONE_PICK_W.copy(); _pr[_p] = 0.0; _pr /= _pr.sum()
     COND_DO[_p] = _pr
 do_idx = np.zeros(N_RIDES, dtype=int)
-for _p in range(len(ZONE_NAMES)):
+for _p in range(N_ZONES):
     _m = pu_idx == _p
     if _m.sum():
-        do_idx[_m] = np.random.choice(len(ZONE_NAMES), size=_m.sum(), p=COND_DO[_p])
+        do_idx[_m] = np.random.choice(N_ZONES, size=_m.sum(), p=COND_DO[_p])
 
 pickup_zone  = np.array(ZONE_NAMES)[pu_idx]
 dropoff_zone = np.array(ZONE_NAMES)[do_idx]
 is_airport   = (pickup_zone == "DXB Airport") | (dropoff_zone == "DXB Airport")
-is_intrazone = (pickup_zone == dropoff_zone)
+is_intrazone = (pu_idx == do_idx)
 
-pickup_lat  = Z_LAT[pu_idx] + np.random.normal(0, 0.008, N_RIDES)
-pickup_lon  = Z_LON[pu_idx] + np.random.normal(0, 0.008, N_RIDES)
-dropoff_lat = Z_LAT[do_idx] + np.random.normal(0, 0.008, N_RIDES)
-dropoff_lon = Z_LON[do_idx] + np.random.normal(0, 0.008, N_RIDES)
+# Apply event multipliers per pickup zone
+for ev in EVENTS:
+    mask = (timestamps_d >= pd.Timestamp(ev["start"])) & (timestamps_d <= pd.Timestamp(ev["end"]))
+    active_event[mask] = ev["name"]
+    event_type[mask]   = ev["type"]
+    # Compute per-ride multiplier based on pickup zone distance from venue
+    for z_name in ZONE_NAMES:
+        z_mask = mask & (pickup_zone == z_name)
+        if z_mask.sum():
+            event_dmult[z_mask] = np.maximum(
+                event_dmult[z_mask],
+                event_multiplier_for_zone(ev, z_name),
+            )
 
+# Jitter coordinates within zone (realistic scatter)
+pickup_lat  = Z_LAT[pu_idx] + np.random.normal(0, 0.012, N_RIDES)
+pickup_lon  = Z_LON[pu_idx] + np.random.normal(0, 0.012, N_RIDES)
+dropoff_lat = Z_LAT[do_idx] + np.random.normal(0, 0.012, N_RIDES)
+dropoff_lon = Z_LON[do_idx] + np.random.normal(0, 0.012, N_RIDES)
+
+# ── 5. Distances and Salik ────────────────────────────────────────────────────
 print("Computing distances and Salik gates...")
 route_direct_distance_km = haversine_arr(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
-route_distance_seed = get_dist_arr(pickup_zone, dropoff_zone)
-route_distance_km = np.maximum(route_distance_seed, route_direct_distance_km * np.random.uniform(1.08, 1.45, N_RIDES))
-route_efficiency_ratio = route_distance_km / np.maximum(route_direct_distance_km, 0.5)
-route_bearing_deg = bearing_arr(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
-salik_gates       = get_salik_arr(pickup_zone, dropoff_zone)
+route_distance_seed      = get_dist_arr(pu_idx, do_idx)
+route_distance_km        = np.maximum(route_distance_seed, route_direct_distance_km * np.random.uniform(1.05, 1.35, N_RIDES))
+route_efficiency_ratio   = route_distance_km / np.maximum(route_direct_distance_km, 0.5)
+route_bearing_deg        = bearing_arr(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+salik_gates              = SALIK_MATRIX_NP[pu_idx, do_idx]
 
-# ── 12. Weather ─────────────────────────────────────────────────────────────
+# ── 6. Weather ────────────────────────────────────────────────────────────────
 temperature_c = np.zeros(N_RIDES)
 humidity_pct  = np.zeros(N_RIDES)
 is_rain       = np.zeros(N_RIDES, dtype=bool)
@@ -399,102 +377,108 @@ for m in range(1,13):
     is_sandstorm[mask]  = np.random.random(n) < w["storm_p"]
 weather_dmult = 1.0 + 0.40*is_rain.astype(float) + 0.25*is_sandstorm.astype(float)
 
-# ── 13. Products ────────────────────────────────────────────────────────────
+# ── 7. Products ───────────────────────────────────────────────────────────────
 print("Assigning products...")
 prod_idx = np.where(
     is_airport,
     np.random.choice(len(PROD_NAMES), size=N_RIDES, p=SH_APT),
     np.random.choice(len(PROD_NAMES), size=N_RIDES, p=SH_REG)
 )
-product_type    = np.array(PROD_NAMES)[prod_idx]
-is_hala_product = PD[prod_idx, I_HALA].astype(bool)
+product_type     = np.array(PROD_NAMES)[prod_idx]
+is_hala_product  = PD[prod_idx, I_HALA].astype(bool)
+payment_method   = np.random.choice(PAY_METHODS, size=N_RIDES, p=PAY_PROBS)
+is_careem_plus   = (payment_method == "Careem Plus")
 
-payment_method = np.random.choice(PAY_METHODS, size=N_RIDES, p=PAY_PROBS)
-is_careem_plus = (payment_method == "Careem Plus")
-
-# ── 14. Supply & trip metrics ────────────────────────────────────────────────
-pickup_density_score = Z_DM[pu_idx]
-dropoff_density_score = Z_DM[do_idx]
+# ── 8. Demand / supply / traffic (UNIFIED formula) ───────────────────────────
 temporal_demand = np.where(is_peak, 1.18, np.where(is_night, 0.92, 1.00))
-ramadan_demand = np.where(is_iftar, 1.35, np.where(is_suhoor, 1.15, np.where(is_ramadan, 0.96, 1.00)))
-weekend_demand = np.where(is_weekend_uae, 1.05, 1.00)
-demand_index = np.clip(
+ramadan_demand  = np.where(is_iftar, 1.35, np.where(is_suhoor, 1.15, np.where(is_ramadan, 0.96, 1.00)))
+weekend_demand  = np.where(is_weekend, 1.05, 1.00)
+demand_index    = np.clip(
     Z_DM[pu_idx] * event_dmult * weather_dmult * temporal_demand * ramadan_demand * weekend_demand,
-    0.75,
-    3.00,
+    0.75, 3.00,
 )
+
 captain_avail = np.clip(
-    1.0 - 0.32*(demand_index - 1.0) + np.random.normal(0, 0.10, N_RIDES),
+    1.0 - 0.32*(demand_index - 1.0) + np.random.normal(0, 0.08, N_RIDES),
     0.15, 1.00
 )
 supply_pressure_index = np.clip(1.0 - captain_avail, 0.0, 1.0)
+
+# ── Unified traffic index formula (matches app inference) ────────────────────
 traffic_index = np.clip(
-    0.78
-    + 0.28 * is_peak.astype(float)
-    + 0.10 * is_weekend_uae.astype(float)
-    + 0.16 * (event_dmult - 1.0)
-    + 0.12 * (weather_dmult - 1.0)
+    0.82
+    + 0.32 * is_peak.astype(float)
+    + 0.10 * is_weekend.astype(float)
+    + 0.14 * (event_dmult - 1.0)
+    + 0.10 * (weather_dmult - 1.0)
     + 0.08 * is_airport.astype(float)
-    + 0.08 * np.clip(route_efficiency_ratio - 1.0, 0.0, 1.5)
-    + np.random.normal(0, 0.05, N_RIDES),
-    0.65,
-    2.20,
-)
-wait_base = np.where(is_airport, 5.5,
-            np.where(is_peak, 4.5, 3.0))
-wait_time = np.clip(
-    wait_base * (1.5 - captain_avail) * (0.95 + 0.20 * traffic_index) + np.random.exponential(1.5, N_RIDES),
-    1.0, 25.0
+    + 0.06 * np.clip(route_efficiency_ratio - 1.0, 0.0, 1.5)
+    + np.random.normal(0, 0.04, N_RIDES),
+    0.68, 2.20,
 )
 free_flow_speed = np.where(is_peak,
     np.random.uniform(38, 52, N_RIDES),
     np.where(is_night,
         np.random.uniform(58, 72, N_RIDES),
-        np.random.uniform(44, 58, N_RIDES)
+        np.random.uniform(44, 58, N_RIDES),
     )
 )
-avg_speed = np.clip(free_flow_speed / traffic_index, 12.0, 78.0)
-trip_duration_min = (route_distance_km / avg_speed) * 60
+avg_speed          = np.clip(free_flow_speed / traffic_index, 12.0, 78.0)
+trip_duration_min  = (route_distance_km / avg_speed) * 60
 
-# ── 15. Pricing ─────────────────────────────────────────────────────────────
+wait_base = np.where(is_airport, 5.5, np.where(is_peak, 4.5, 3.0))
+wait_time = np.clip(
+    wait_base * (1.5 - captain_avail) * (0.95 + 0.20 * traffic_index)
+    + np.random.exponential(1.5, N_RIDES),
+    1.0, 25.0
+)
+
+# ── 9. Pricing ────────────────────────────────────────────────────────────────
 print("Computing fares...")
-per_km_arr  = PD[prod_idx, I_PKM]
+# Monthly fuel index: small per-km adjustment
+fuel_adj = FUEL_INDEX[months - 1]   # shape (N_RIDES,)
+
+per_km_arr  = PD[prod_idx, I_PKM] + fuel_adj
 per_min_arr = PD[prod_idx, I_PMIN]
 min_fare    = PD[prod_idx, I_MINF]
-base_day    = PD[prod_idx, I_BDAY]
-base_night  = PD[prod_idx, I_BNGT]
-book_peak   = PD[prod_idx, I_BKPK]
-book_off    = PD[prod_idx, I_BKOF]
+base_day    = PD[prod_idx, I_BDAY]; base_night = PD[prod_idx, I_BNGT]
+book_peak   = PD[prod_idx, I_BKPK]; book_off   = PD[prod_idx, I_BKOF]
 book_night  = PD[prod_idx, I_BKNT]
 
 flagfall    = np.where(is_night, base_night, base_day)
-booking_fee = np.where(is_peak, book_peak,
-              np.where(is_night, book_night, book_off))
+booking_fee = np.where(is_peak, book_peak, np.where(is_night, book_night, book_off))
 salik_cost  = salik_gates * 4.0
 
-# Hala (RTA taxi meter)
+# Hala (RTA regulated meter)
 hala_apt_pu = is_hala_product & (pickup_zone == "DXB Airport")
 hala_start  = np.where(hala_apt_pu, 25.0, flagfall + booking_fee)
 hala_fare   = hala_start + per_km_arr * route_distance_km + wait_time * 0.50 + salik_cost
 hala_final  = np.maximum(hala_fare, min_fare)
 
-# Private hire (Careem dynamic pricing: base + per-km + per-min * full duration)
+# Private hire (Careem dynamic)
 demand_supply_gap = np.clip(demand_index - captain_avail, 0.0, 1.5)
 surge_mult  = np.clip(1.0 + demand_supply_gap * 0.55, 1.00, 2.50)
-ph_base     = flagfall + booking_fee
-ph_fare     = ph_base + (per_km_arr * route_distance_km + per_min_arr * trip_duration_min) * surge_mult + salik_cost
-ph_final    = np.maximum(ph_fare, min_fare)
+# Round surge to nearest 0.25x (as real Careem does)
+surge_mult  = np.round(surge_mult * 4) / 4
 
-final_price    = np.where(is_hala_product, hala_final, ph_final)
-metered_fare   = np.where(is_hala_product, hala_fare,  ph_fare)
-surge_out      = np.where(is_hala_product, 1.0, surge_mult)
+ph_base = flagfall + booking_fee
+ph_fare = ph_base + (per_km_arr * route_distance_km + per_min_arr * trip_duration_min) * surge_mult + salik_cost
+ph_final = np.maximum(ph_fare, min_fare)
 
-# ── 16. Outcomes ────────────────────────────────────────────────────────────
+# Careem Plus 5% loyalty discount (private hire only)
+ph_final = np.where(is_careem_plus & ~is_hala_product, ph_final * 0.95, ph_final)
+
+final_price  = np.where(is_hala_product, hala_final, ph_final)
+metered_fare = np.where(is_hala_product, hala_fare,  ph_fare)
+surge_out    = np.where(is_hala_product, 1.0, surge_mult)
+
+# Realistic market noise (~2.5%) — the part a model should NOT be able to explain
+price_noise = np.random.normal(0, 0.025, N_RIDES)
+final_price = np.round(np.maximum(final_price * (1 + price_noise), min_fare), 2)
+
+# ── 10. Outcomes ──────────────────────────────────────────────────────────────
 cancel_prob = np.clip(
-    0.08
-    + (1.0 - captain_avail) * 0.10
-    + is_rain.astype(float) * 0.03
-    + is_sandstorm.astype(float) * 0.03,
+    0.08 + (1.0 - captain_avail)*0.10 + is_rain.astype(float)*0.03 + is_sandstorm.astype(float)*0.03,
     0.05, 0.28
 )
 cancel_mask = np.random.random(N_RIDES) < cancel_prob
@@ -502,7 +486,7 @@ cancel_why  = np.random.choice(
     ["Captain Cancelled","Customer Cancelled","No Captain Available"],
     size=N_RIDES, p=[0.40, 0.40, 0.20]
 )
-status = np.full(N_RIDES, "Completed", dtype=object)
+status      = np.full(N_RIDES, "Completed", dtype=object)
 status[cancel_mask] = cancel_why[cancel_mask]
 cancel_reason_col = np.full(N_RIDES, "N/A", dtype=object)
 cancel_reason_col[cancel_mask] = cancel_why[cancel_mask]
@@ -513,7 +497,7 @@ capt_rating[cancel_mask] = np.nan
 cust_rating[cancel_mask]  = np.nan
 eta_dev = np.round(np.random.normal(0, 1.5, N_RIDES), 1)
 
-# ── 17. Assemble ────────────────────────────────────────────────────────────
+# ── 11. Assemble DataFrame ────────────────────────────────────────────────────
 print("Assembling DataFrame...")
 ride_ids = [f"RID{2025000000+i:09d}" for i in range(N_RIDES)]
 cust_ids = [f"CUS{np.random.randint(1000000,5000000):07d}" for _ in range(N_RIDES)]
@@ -533,7 +517,7 @@ df = pd.DataFrame({
     "month":                      months,
     "month_name":                 timestamps.month_name().values,
     "quarter":                    timestamps.quarter.values,
-    "is_weekend":                 is_weekend_uae,
+    "is_weekend":                 is_weekend,
     "is_peak_hour":               is_peak,
     "is_late_night":              is_night,
     "is_offpeak":                 is_offpk,
@@ -559,8 +543,8 @@ df = pd.DataFrame({
     "dropoff_area_type":          np.array(Z_TIER)[do_idx],
     "is_airport_ride":            is_airport,
     "is_intrazone_trip":          is_intrazone,
-    "pickup_density_score":       np.round(pickup_density_score, 3),
-    "dropoff_density_score":      np.round(dropoff_density_score, 3),
+    "pickup_density_score":       np.round(Z_DM[pu_idx], 3),
+    "dropoff_density_score":      np.round(Z_DM[do_idx], 3),
     "route_direct_distance_km":   np.round(route_direct_distance_km, 2),
     "route_distance_km":          np.round(route_distance_km, 2),
     "route_efficiency_ratio":     np.round(route_efficiency_ratio, 3),
@@ -590,7 +574,7 @@ df = pd.DataFrame({
     "eta_deviation_min":          eta_dev,
 })
 
-# ── 18. Validate ────────────────────────────────────────────────────────────
+# ── 12. Validate ──────────────────────────────────────────────────────────────
 completed = df[df["booking_status"] == "Completed"]
 apt_n = df["is_airport_ride"].sum()
 print("\n── Validation ──────────────────────────────────────────────────────")
@@ -598,23 +582,17 @@ print(f"  Total rides:        {len(df):,}")
 print(f"  Completed:          {len(completed):,} ({100*len(completed)/len(df):.1f}%)")
 print(f"  Airport rides:      {apt_n:,} ({100*apt_n/len(df):.1f}%)")
 print(f"  Avg price (compl.): AED {completed['final_price_aed'].mean():.2f}")
-print(f"  Price range:        AED {df['final_price_aed'].min():.2f} - {df['final_price_aed'].max():.2f}")
+print(f"  Price range:        AED {df['final_price_aed'].min():.2f} – {df['final_price_aed'].max():.2f}")
 print(f"  Avg direct route:   {df['route_direct_distance_km'].mean():.1f} km")
-print(f"  Avg distance:       {df['route_distance_km'].mean():.1f} km")
+print(f"  Avg road dist:      {df['route_distance_km'].mean():.1f} km")
 print(f"  Avg Salik gates:    {df['salik_gates'].mean():.2f}")
 print(f"  Avg demand index:   {df['demand_index'].mean():.2f}")
 print(f"  Avg traffic index:  {df['traffic_index'].mean():.2f}")
 print(f"  Hala rides:         {df['is_hala_product'].sum():,} ({100*df['is_hala_product'].mean():.1f}%)")
-print(f"\n  Product mix:")
-for p in PROD_NAMES:
-    g = df[df["product_type"]==p]
-    print(f"    {p:<14} {len(g):>6,} ({100*len(g)/len(df):4.1f}%)  avg AED {g['final_price_aed'].mean():.2f}")
+print(f"\n  Zone distribution (top 10 pickups):")
+for z, n in df['pickup_zone'].value_counts().head(10).items():
+    print(f"    {z:<20} {n:>7,} ({100*n/len(df):.1f}%)")
 
-print(f"\n  Period check (20km DXB->Marina Hala Taxi, peak):")
-# Manual calculation: AED 25 + 20*2.20 + avg 3min wait*0.50 + 3 Salik*4
-print(f"    Expected ~AED {25 + 20*2.20 + 3*0.50 + 3*4:.1f} (AED 25 flagfall + km + wait + Salik)")
-
-# ── 19. Save ────────────────────────────────────────────────────────────────
 df.to_csv(OUT_PATH, index=False)
-print(f"\n✓ Dataset saved -> {OUT_PATH}")
+print(f"\n✓ Dataset saved → {OUT_PATH}")
 print(f"  Shape: {df.shape[0]:,} rows x {df.shape[1]} columns")

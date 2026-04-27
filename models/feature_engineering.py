@@ -24,38 +24,38 @@ BOOL_COLS = [
 TARGET = "final_price_aed"
 
 EXCLUDE = [
-    "ride_id",
-    "customer_id",
-    "captain_id",
-    "timestamp",
-    "date",
-    "day_name",
-    "month_name",
-    "week_of_year",
-    "hour",
-    "day_of_week",
-    "month",
-    "minute",
+    # identifiers / metadata
+    "ride_id", "customer_id", "captain_id",
+    "timestamp", "date", "day_name", "month_name",
+    "week_of_year", "hour", "day_of_week", "month", "minute",
+    "booking_status", "cancellation_reason",
+    "captain_rating", "customer_rating", "eta_deviation_min",
+    "active_event", "pickup_zone", "dropoff_zone",
+    "pickup_area_type", "dropoff_area_type", "quarter",
+    "weather_source", "weather_label",
+    "traffic_source", "traffic_condition", "route_source",
+    # target & directly-derived price columns
     TARGET,
     "metered_fare_aed",
     "price_per_km_aed",
+    # ── leaky features: direct components of the fare formula ──
+    # booking_fee_aed is added straight to every fare
+    "booking_fee_aed",
+    # trip_duration_min appears as (per_min * duration) in private-hire pricing
+    "trip_duration_min",
+    # avg_speed_kmh = route_distance / (trip_duration / 60) — fully redundant
+    "avg_speed_kmh",
+    # wait_time_min is multiplied by 0.50 in Hala meter fares
+    "wait_time_min",
+    # supply_pressure_index = 1 − captain_availability_score — redundant copy
+    "supply_pressure_index",
+    # captain_availability_score: combined with demand_index it reconstructs
+    # demand_supply_gap → surge_multiplier = 1 + gap*0.55 exactly
+    "captain_availability_score",
+    # salik_cost_aed = salik_gates × 4.00 — redundant with salik_gates
+    "salik_cost_aed",
+    # surge_multiplier is derived from demand/availability then applied to price
     "surge_multiplier",
-    "booking_status",
-    "cancellation_reason",
-    "captain_rating",
-    "customer_rating",
-    "eta_deviation_min",
-    "active_event",
-    "pickup_zone",
-    "dropoff_zone",
-    "pickup_area_type",
-    "dropoff_area_type",
-    "quarter",
-    "weather_source",
-    "weather_label",
-    "traffic_source",
-    "traffic_condition",
-    "route_source",
 ]
 
 

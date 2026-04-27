@@ -1,0 +1,1522 @@
+{
+  "Downtown|Business Bay": {
+    "distance_km": 6.09,
+    "duration_min": 8.3
+  },
+  "Downtown|DIFC": {
+    "distance_km": 2.99,
+    "duration_min": 6.1
+  },
+  "Downtown|Bur Dubai": {
+    "distance_km": 7.15,
+    "duration_min": 9.0
+  },
+  "Downtown|Deira": {
+    "distance_km": 12.09,
+    "duration_min": 14.0
+  },
+  "Downtown|Jumeirah": {
+    "distance_km": 9.23,
+    "duration_min": 11.0
+  },
+  "Downtown|Al Barsha": {
+    "distance_km": 18.06,
+    "duration_min": 17.9
+  },
+  "Downtown|Al Quoz": {
+    "distance_km": 11.27,
+    "duration_min": 12.3
+  },
+  "Downtown|Marina": {
+    "distance_km": 22.07,
+    "duration_min": 21.8
+  },
+  "Downtown|Palm Jumeirah": {
+    "distance_km": 22.98,
+    "duration_min": 22.9
+  },
+  "Downtown|DXB Airport": {
+    "distance_km": 16.82,
+    "duration_min": 19.2
+  },
+  "Downtown|Al Nahda": {
+    "distance_km": 17.0,
+    "duration_min": 19.5
+  },
+  "Downtown|Mirdif": {
+    "distance_km": 20.3,
+    "duration_min": 21.5
+  },
+  "Downtown|Silicon Oasis": {
+    "distance_km": 17.61,
+    "duration_min": 20.9
+  },
+  "Downtown|Dubai Hills": {
+    "distance_km": 16.09,
+    "duration_min": 17.4
+  },
+  "Downtown|JVC": {
+    "distance_km": 23.09,
+    "duration_min": 22.8
+  },
+  "Downtown|Jebel Ali": {
+    "distance_km": 27.42,
+    "duration_min": 25.0
+  },
+  "Downtown|Dubai South": {
+    "distance_km": 41.58,
+    "duration_min": 38.2
+  },
+  "Downtown|Ras Al Khor": {
+    "distance_km": 13.6,
+    "duration_min": 20.4
+  },
+  "Downtown|Sharjah": {
+    "distance_km": 25.29,
+    "duration_min": 26.9
+  },
+  "Business Bay|Downtown": {
+    "distance_km": 4.65,
+    "duration_min": 8.3
+  },
+  "Business Bay|DIFC": {
+    "distance_km": 6.86,
+    "duration_min": 9.3
+  },
+  "Business Bay|Bur Dubai": {
+    "distance_km": 10.43,
+    "duration_min": 11.7
+  },
+  "Business Bay|Deira": {
+    "distance_km": 15.37,
+    "duration_min": 16.7
+  },
+  "Business Bay|Jumeirah": {
+    "distance_km": 8.73,
+    "duration_min": 12.2
+  },
+  "Business Bay|Al Barsha": {
+    "distance_km": 17.56,
+    "duration_min": 19.1
+  },
+  "Business Bay|Al Quoz": {
+    "distance_km": 8.41,
+    "duration_min": 12.7
+  },
+  "Business Bay|Marina": {
+    "distance_km": 21.57,
+    "duration_min": 22.9
+  },
+  "Business Bay|Palm Jumeirah": {
+    "distance_km": 22.48,
+    "duration_min": 24.1
+  },
+  "Business Bay|DXB Airport": {
+    "distance_km": 20.1,
+    "duration_min": 21.9
+  },
+  "Business Bay|Al Nahda": {
+    "distance_km": 20.28,
+    "duration_min": 22.1
+  },
+  "Business Bay|Mirdif": {
+    "distance_km": 26.06,
+    "duration_min": 25.7
+  },
+  "Business Bay|Silicon Oasis": {
+    "distance_km": 21.59,
+    "duration_min": 24.0
+  },
+  "Business Bay|Dubai Hills": {
+    "distance_km": 13.32,
+    "duration_min": 15.6
+  },
+  "Business Bay|JVC": {
+    "distance_km": 20.32,
+    "duration_min": 21.1
+  },
+  "Business Bay|Jebel Ali": {
+    "distance_km": 26.92,
+    "duration_min": 26.1
+  },
+  "Business Bay|Dubai South": {
+    "distance_km": 38.81,
+    "duration_min": 36.5
+  },
+  "Business Bay|Ras Al Khor": {
+    "distance_km": 16.99,
+    "duration_min": 22.3
+  },
+  "Business Bay|Sharjah": {
+    "distance_km": 28.57,
+    "duration_min": 29.6
+  },
+  "DIFC|Downtown": {
+    "distance_km": 3.38,
+    "duration_min": 5.4
+  },
+  "DIFC|Business Bay": {
+    "distance_km": 8.33,
+    "duration_min": 10.0
+  },
+  "DIFC|Bur Dubai": {
+    "distance_km": 5.09,
+    "duration_min": 6.4
+  },
+  "DIFC|Deira": {
+    "distance_km": 10.33,
+    "duration_min": 11.9
+  },
+  "DIFC|Jumeirah": {
+    "distance_km": 11.18,
+    "duration_min": 11.5
+  },
+  "DIFC|Al Barsha": {
+    "distance_km": 20.01,
+    "duration_min": 18.5
+  },
+  "DIFC|Al Quoz": {
+    "distance_km": 13.21,
+    "duration_min": 12.8
+  },
+  "DIFC|Marina": {
+    "distance_km": 24.01,
+    "duration_min": 22.3
+  },
+  "DIFC|Palm Jumeirah": {
+    "distance_km": 24.92,
+    "duration_min": 23.5
+  },
+  "DIFC|DXB Airport": {
+    "distance_km": 15.05,
+    "duration_min": 17.1
+  },
+  "DIFC|Al Nahda": {
+    "distance_km": 15.23,
+    "duration_min": 17.3
+  },
+  "DIFC|Mirdif": {
+    "distance_km": 20.26,
+    "duration_min": 20.8
+  },
+  "DIFC|Silicon Oasis": {
+    "distance_km": 19.25,
+    "duration_min": 18.9
+  },
+  "DIFC|Dubai Hills": {
+    "distance_km": 18.34,
+    "duration_min": 19.1
+  },
+  "DIFC|JVC": {
+    "distance_km": 26.93,
+    "duration_min": 24.1
+  },
+  "DIFC|Jebel Ali": {
+    "distance_km": 29.37,
+    "duration_min": 25.5
+  },
+  "DIFC|Dubai South": {
+    "distance_km": 47.92,
+    "duration_min": 39.2
+  },
+  "DIFC|Ras Al Khor": {
+    "distance_km": 15.62,
+    "duration_min": 21.4
+  },
+  "DIFC|Sharjah": {
+    "distance_km": 23.53,
+    "duration_min": 24.8
+  },
+  "Bur Dubai|Downtown": {
+    "distance_km": 7.41,
+    "duration_min": 8.9
+  },
+  "Bur Dubai|Business Bay": {
+    "distance_km": 11.96,
+    "duration_min": 12.9
+  },
+  "Bur Dubai|DIFC": {
+    "distance_km": 5.27,
+    "duration_min": 7.3
+  },
+  "Bur Dubai|Deira": {
+    "distance_km": 6.53,
+    "duration_min": 8.5
+  },
+  "Bur Dubai|Jumeirah": {
+    "distance_km": 13.45,
+    "duration_min": 13.1
+  },
+  "Bur Dubai|Al Barsha": {
+    "distance_km": 22.28,
+    "duration_min": 20.1
+  },
+  "Bur Dubai|Al Quoz": {
+    "distance_km": 15.49,
+    "duration_min": 14.4
+  },
+  "Bur Dubai|Marina": {
+    "distance_km": 26.29,
+    "duration_min": 23.9
+  },
+  "Bur Dubai|Palm Jumeirah": {
+    "distance_km": 27.2,
+    "duration_min": 25.1
+  },
+  "Bur Dubai|DXB Airport": {
+    "distance_km": 11.25,
+    "duration_min": 13.7
+  },
+  "Bur Dubai|Al Nahda": {
+    "distance_km": 11.43,
+    "duration_min": 14.0
+  },
+  "Bur Dubai|Mirdif": {
+    "distance_km": 19.03,
+    "duration_min": 19.5
+  },
+  "Bur Dubai|Silicon Oasis": {
+    "distance_km": 20.63,
+    "duration_min": 20.4
+  },
+  "Bur Dubai|Dubai Hills": {
+    "distance_km": 21.73,
+    "duration_min": 21.3
+  },
+  "Bur Dubai|JVC": {
+    "distance_km": 29.21,
+    "duration_min": 25.7
+  },
+  "Bur Dubai|Jebel Ali": {
+    "distance_km": 31.65,
+    "duration_min": 27.1
+  },
+  "Bur Dubai|Dubai South": {
+    "distance_km": 50.2,
+    "duration_min": 40.8
+  },
+  "Bur Dubai|Ras Al Khor": {
+    "distance_km": 18.29,
+    "duration_min": 20.9
+  },
+  "Bur Dubai|Sharjah": {
+    "distance_km": 19.72,
+    "duration_min": 21.4
+  },
+  "Deira|Downtown": {
+    "distance_km": 12.3,
+    "duration_min": 12.9
+  },
+  "Deira|Business Bay": {
+    "distance_km": 14.58,
+    "duration_min": 15.4
+  },
+  "Deira|DIFC": {
+    "distance_km": 10.21,
+    "duration_min": 11.6
+  },
+  "Deira|Bur Dubai": {
+    "distance_km": 6.17,
+    "duration_min": 7.1
+  },
+  "Deira|Jumeirah": {
+    "distance_km": 18.34,
+    "duration_min": 17.1
+  },
+  "Deira|Al Barsha": {
+    "distance_km": 27.17,
+    "duration_min": 24.1
+  },
+  "Deira|Al Quoz": {
+    "distance_km": 20.38,
+    "duration_min": 18.5
+  },
+  "Deira|Marina": {
+    "distance_km": 31.18,
+    "duration_min": 27.9
+  },
+  "Deira|Palm Jumeirah": {
+    "distance_km": 32.09,
+    "duration_min": 29.1
+  },
+  "Deira|DXB Airport": {
+    "distance_km": 6.49,
+    "duration_min": 8.6
+  },
+  "Deira|Al Nahda": {
+    "distance_km": 6.65,
+    "duration_min": 9.2
+  },
+  "Deira|Mirdif": {
+    "distance_km": 15.37,
+    "duration_min": 16.9
+  },
+  "Deira|Silicon Oasis": {
+    "distance_km": 23.25,
+    "duration_min": 22.8
+  },
+  "Deira|Dubai Hills": {
+    "distance_km": 24.6,
+    "duration_min": 24.6
+  },
+  "Deira|JVC": {
+    "distance_km": 34.1,
+    "duration_min": 29.7
+  },
+  "Deira|Jebel Ali": {
+    "distance_km": 36.54,
+    "duration_min": 31.1
+  },
+  "Deira|Dubai South": {
+    "distance_km": 55.09,
+    "duration_min": 44.8
+  },
+  "Deira|Ras Al Khor": {
+    "distance_km": 16.85,
+    "duration_min": 20.2
+  },
+  "Deira|Sharjah": {
+    "distance_km": 14.94,
+    "duration_min": 16.6
+  },
+  "Jumeirah|Downtown": {
+    "distance_km": 8.89,
+    "duration_min": 10.9
+  },
+  "Jumeirah|Business Bay": {
+    "distance_km": 8.94,
+    "duration_min": 10.7
+  },
+  "Jumeirah|DIFC": {
+    "distance_km": 10.13,
+    "duration_min": 11.5
+  },
+  "Jumeirah|Bur Dubai": {
+    "distance_km": 13.7,
+    "duration_min": 13.8
+  },
+  "Jumeirah|Deira": {
+    "distance_km": 18.64,
+    "duration_min": 18.8
+  },
+  "Jumeirah|Al Barsha": {
+    "distance_km": 12.6,
+    "duration_min": 13.6
+  },
+  "Jumeirah|Al Quoz": {
+    "distance_km": 5.6,
+    "duration_min": 7.2
+  },
+  "Jumeirah|Marina": {
+    "distance_km": 16.6,
+    "duration_min": 17.5
+  },
+  "Jumeirah|Palm Jumeirah": {
+    "distance_km": 17.51,
+    "duration_min": 18.7
+  },
+  "Jumeirah|DXB Airport": {
+    "distance_km": 23.36,
+    "duration_min": 24.0
+  },
+  "Jumeirah|Al Nahda": {
+    "distance_km": 23.55,
+    "duration_min": 24.3
+  },
+  "Jumeirah|Mirdif": {
+    "distance_km": 29.32,
+    "duration_min": 27.8
+  },
+  "Jumeirah|Silicon Oasis": {
+    "distance_km": 23.99,
+    "duration_min": 25.8
+  },
+  "Jumeirah|Dubai Hills": {
+    "distance_km": 12.06,
+    "duration_min": 14.7
+  },
+  "Jumeirah|JVC": {
+    "distance_km": 19.52,
+    "duration_min": 19.3
+  },
+  "Jumeirah|Jebel Ali": {
+    "distance_km": 21.96,
+    "duration_min": 20.7
+  },
+  "Jumeirah|Dubai South": {
+    "distance_km": 40.51,
+    "duration_min": 34.4
+  },
+  "Jumeirah|Ras Al Khor": {
+    "distance_km": 19.57,
+    "duration_min": 24.2
+  },
+  "Jumeirah|Sharjah": {
+    "distance_km": 31.84,
+    "duration_min": 31.7
+  },
+  "Al Barsha|Downtown": {
+    "distance_km": 20.86,
+    "duration_min": 20.4
+  },
+  "Al Barsha|Business Bay": {
+    "distance_km": 18.59,
+    "duration_min": 19.1
+  },
+  "Al Barsha|DIFC": {
+    "distance_km": 22.1,
+    "duration_min": 21.0
+  },
+  "Al Barsha|Bur Dubai": {
+    "distance_km": 25.67,
+    "duration_min": 23.3
+  },
+  "Al Barsha|Deira": {
+    "distance_km": 30.61,
+    "duration_min": 28.3
+  },
+  "Al Barsha|Jumeirah": {
+    "distance_km": 15.97,
+    "duration_min": 16.4
+  },
+  "Al Barsha|Al Quoz": {
+    "distance_km": 13.06,
+    "duration_min": 13.5
+  },
+  "Al Barsha|Marina": {
+    "distance_km": 11.37,
+    "duration_min": 14.6
+  },
+  "Al Barsha|Palm Jumeirah": {
+    "distance_km": 11.89,
+    "duration_min": 14.6
+  },
+  "Al Barsha|DXB Airport": {
+    "distance_km": 36.45,
+    "duration_min": 32.2
+  },
+  "Al Barsha|Al Nahda": {
+    "distance_km": 35.52,
+    "duration_min": 33.8
+  },
+  "Al Barsha|Mirdif": {
+    "distance_km": 37.84,
+    "duration_min": 33.9
+  },
+  "Al Barsha|Silicon Oasis": {
+    "distance_km": 26.55,
+    "duration_min": 24.1
+  },
+  "Al Barsha|Dubai Hills": {
+    "distance_km": 10.86,
+    "duration_min": 12.7
+  },
+  "Al Barsha|JVC": {
+    "distance_km": 10.73,
+    "duration_min": 12.9
+  },
+  "Al Barsha|Jebel Ali": {
+    "distance_km": 12.68,
+    "duration_min": 16.1
+  },
+  "Al Barsha|Dubai South": {
+    "distance_km": 26.32,
+    "duration_min": 25.5
+  },
+  "Al Barsha|Ras Al Khor": {
+    "distance_km": 28.75,
+    "duration_min": 29.1
+  },
+  "Al Barsha|Sharjah": {
+    "distance_km": 43.81,
+    "duration_min": 41.2
+  },
+  "Al Quoz|Downtown": {
+    "distance_km": 9.72,
+    "duration_min": 10.8
+  },
+  "Al Quoz|Business Bay": {
+    "distance_km": 9.77,
+    "duration_min": 10.6
+  },
+  "Al Quoz|DIFC": {
+    "distance_km": 10.95,
+    "duration_min": 11.4
+  },
+  "Al Quoz|Bur Dubai": {
+    "distance_km": 14.52,
+    "duration_min": 13.7
+  },
+  "Al Quoz|Deira": {
+    "distance_km": 19.47,
+    "duration_min": 18.7
+  },
+  "Al Quoz|Jumeirah": {
+    "distance_km": 4.82,
+    "duration_min": 6.8
+  },
+  "Al Quoz|Al Barsha": {
+    "distance_km": 10.4,
+    "duration_min": 12.7
+  },
+  "Al Quoz|Marina": {
+    "distance_km": 14.41,
+    "duration_min": 16.5
+  },
+  "Al Quoz|Palm Jumeirah": {
+    "distance_km": 15.31,
+    "duration_min": 17.7
+  },
+  "Al Quoz|DXB Airport": {
+    "distance_km": 24.19,
+    "duration_min": 23.9
+  },
+  "Al Quoz|Al Nahda": {
+    "distance_km": 24.37,
+    "duration_min": 24.2
+  },
+  "Al Quoz|Mirdif": {
+    "distance_km": 30.15,
+    "duration_min": 27.7
+  },
+  "Al Quoz|Silicon Oasis": {
+    "distance_km": 20.66,
+    "duration_min": 25.5
+  },
+  "Al Quoz|Dubai Hills": {
+    "distance_km": 9.06,
+    "duration_min": 11.6
+  },
+  "Al Quoz|JVC": {
+    "distance_km": 15.88,
+    "duration_min": 17.7
+  },
+  "Al Quoz|Jebel Ali": {
+    "distance_km": 19.76,
+    "duration_min": 19.7
+  },
+  "Al Quoz|Dubai South": {
+    "distance_km": 38.32,
+    "duration_min": 33.4
+  },
+  "Al Quoz|Ras Al Khor": {
+    "distance_km": 20.4,
+    "duration_min": 24.1
+  },
+  "Al Quoz|Sharjah": {
+    "distance_km": 32.66,
+    "duration_min": 31.6
+  },
+  "Marina|Downtown": {
+    "distance_km": 22.21,
+    "duration_min": 22.0
+  },
+  "Marina|Business Bay": {
+    "distance_km": 22.26,
+    "duration_min": 21.7
+  },
+  "Marina|DIFC": {
+    "distance_km": 23.45,
+    "duration_min": 22.6
+  },
+  "Marina|Bur Dubai": {
+    "distance_km": 27.02,
+    "duration_min": 24.9
+  },
+  "Marina|Deira": {
+    "distance_km": 31.96,
+    "duration_min": 29.9
+  },
+  "Marina|Jumeirah": {
+    "distance_km": 17.32,
+    "duration_min": 18.0
+  },
+  "Marina|Al Barsha": {
+    "distance_km": 7.31,
+    "duration_min": 10.5
+  },
+  "Marina|Al Quoz": {
+    "distance_km": 14.41,
+    "duration_min": 15.1
+  },
+  "Marina|Palm Jumeirah": {
+    "distance_km": 8.15,
+    "duration_min": 12.6
+  },
+  "Marina|DXB Airport": {
+    "distance_km": 36.69,
+    "duration_min": 35.1
+  },
+  "Marina|Al Nahda": {
+    "distance_km": 36.87,
+    "duration_min": 35.4
+  },
+  "Marina|Mirdif": {
+    "distance_km": 42.65,
+    "duration_min": 38.9
+  },
+  "Marina|Silicon Oasis": {
+    "distance_km": 34.57,
+    "duration_min": 32.4
+  },
+  "Marina|Dubai Hills": {
+    "distance_km": 16.86,
+    "duration_min": 19.0
+  },
+  "Marina|JVC": {
+    "distance_km": 19.72,
+    "duration_min": 21.3
+  },
+  "Marina|Jebel Ali": {
+    "distance_km": 7.72,
+    "duration_min": 11.1
+  },
+  "Marina|Dubai South": {
+    "distance_km": 26.28,
+    "duration_min": 24.8
+  },
+  "Marina|Ras Al Khor": {
+    "distance_km": 32.9,
+    "duration_min": 35.3
+  },
+  "Marina|Sharjah": {
+    "distance_km": 45.16,
+    "duration_min": 42.8
+  },
+  "Palm Jumeirah|Downtown": {
+    "distance_km": 22.4,
+    "duration_min": 21.7
+  },
+  "Palm Jumeirah|Business Bay": {
+    "distance_km": 22.45,
+    "duration_min": 21.4
+  },
+  "Palm Jumeirah|DIFC": {
+    "distance_km": 23.63,
+    "duration_min": 22.3
+  },
+  "Palm Jumeirah|Bur Dubai": {
+    "distance_km": 27.2,
+    "duration_min": 24.6
+  },
+  "Palm Jumeirah|Deira": {
+    "distance_km": 32.15,
+    "duration_min": 29.6
+  },
+  "Palm Jumeirah|Jumeirah": {
+    "distance_km": 17.5,
+    "duration_min": 17.6
+  },
+  "Palm Jumeirah|Al Barsha": {
+    "distance_km": 8.17,
+    "duration_min": 10.5
+  },
+  "Palm Jumeirah|Al Quoz": {
+    "distance_km": 14.6,
+    "duration_min": 14.8
+  },
+  "Palm Jumeirah|Marina": {
+    "distance_km": 8.77,
+    "duration_min": 12.9
+  },
+  "Palm Jumeirah|DXB Airport": {
+    "distance_km": 36.87,
+    "duration_min": 34.8
+  },
+  "Palm Jumeirah|Al Nahda": {
+    "distance_km": 37.05,
+    "duration_min": 35.1
+  },
+  "Palm Jumeirah|Mirdif": {
+    "distance_km": 42.83,
+    "duration_min": 38.6
+  },
+  "Palm Jumeirah|Silicon Oasis": {
+    "distance_km": 34.2,
+    "duration_min": 32.7
+  },
+  "Palm Jumeirah|Dubai Hills": {
+    "distance_km": 17.05,
+    "duration_min": 18.7
+  },
+  "Palm Jumeirah|JVC": {
+    "distance_km": 21.32,
+    "duration_min": 21.4
+  },
+  "Palm Jumeirah|Jebel Ali": {
+    "distance_km": 14.25,
+    "duration_min": 15.8
+  },
+  "Palm Jumeirah|Dubai South": {
+    "distance_km": 32.8,
+    "duration_min": 29.5
+  },
+  "Palm Jumeirah|Ras Al Khor": {
+    "distance_km": 33.08,
+    "duration_min": 35.0
+  },
+  "Palm Jumeirah|Sharjah": {
+    "distance_km": 45.34,
+    "duration_min": 42.5
+  },
+  "DXB Airport|Downtown": {
+    "distance_km": 17.13,
+    "duration_min": 19.0
+  },
+  "DXB Airport|Business Bay": {
+    "distance_km": 19.94,
+    "duration_min": 18.6
+  },
+  "DXB Airport|DIFC": {
+    "distance_km": 15.04,
+    "duration_min": 17.8
+  },
+  "DXB Airport|Bur Dubai": {
+    "distance_km": 11.0,
+    "duration_min": 13.2
+  },
+  "DXB Airport|Deira": {
+    "distance_km": 6.72,
+    "duration_min": 8.9
+  },
+  "DXB Airport|Jumeirah": {
+    "distance_km": 23.17,
+    "duration_min": 23.3
+  },
+  "DXB Airport|Al Barsha": {
+    "distance_km": 32.0,
+    "duration_min": 30.2
+  },
+  "DXB Airport|Al Quoz": {
+    "distance_km": 25.21,
+    "duration_min": 24.6
+  },
+  "DXB Airport|Marina": {
+    "distance_km": 36.01,
+    "duration_min": 34.0
+  },
+  "DXB Airport|Palm Jumeirah": {
+    "distance_km": 36.92,
+    "duration_min": 35.2
+  },
+  "DXB Airport|Al Nahda": {
+    "distance_km": 4.61,
+    "duration_min": 8.1
+  },
+  "DXB Airport|Mirdif": {
+    "distance_km": 10.93,
+    "duration_min": 14.3
+  },
+  "DXB Airport|Silicon Oasis": {
+    "distance_km": 22.96,
+    "duration_min": 21.8
+  },
+  "DXB Airport|Dubai Hills": {
+    "distance_km": 29.97,
+    "duration_min": 27.7
+  },
+  "DXB Airport|JVC": {
+    "distance_km": 36.18,
+    "duration_min": 30.0
+  },
+  "DXB Airport|Jebel Ali": {
+    "distance_km": 41.36,
+    "duration_min": 37.3
+  },
+  "DXB Airport|Dubai South": {
+    "distance_km": 57.85,
+    "duration_min": 47.4
+  },
+  "DXB Airport|Ras Al Khor": {
+    "distance_km": 14.11,
+    "duration_min": 18.1
+  },
+  "DXB Airport|Sharjah": {
+    "distance_km": 15.26,
+    "duration_min": 16.8
+  },
+  "Al Nahda|Downtown": {
+    "distance_km": 17.26,
+    "duration_min": 20.3
+  },
+  "Al Nahda|Business Bay": {
+    "distance_km": 22.84,
+    "duration_min": 21.9
+  },
+  "Al Nahda|DIFC": {
+    "distance_km": 15.17,
+    "duration_min": 19.0
+  },
+  "Al Nahda|Bur Dubai": {
+    "distance_km": 11.13,
+    "duration_min": 14.5
+  },
+  "Al Nahda|Deira": {
+    "distance_km": 6.8,
+    "duration_min": 10.2
+  },
+  "Al Nahda|Jumeirah": {
+    "distance_km": 23.3,
+    "duration_min": 24.6
+  },
+  "Al Nahda|Al Barsha": {
+    "distance_km": 32.13,
+    "duration_min": 31.5
+  },
+  "Al Nahda|Al Quoz": {
+    "distance_km": 25.34,
+    "duration_min": 25.9
+  },
+  "Al Nahda|Marina": {
+    "distance_km": 36.14,
+    "duration_min": 35.3
+  },
+  "Al Nahda|Palm Jumeirah": {
+    "distance_km": 37.05,
+    "duration_min": 36.5
+  },
+  "Al Nahda|DXB Airport": {
+    "distance_km": 4.56,
+    "duration_min": 7.3
+  },
+  "Al Nahda|Mirdif": {
+    "distance_km": 13.3,
+    "duration_min": 17.4
+  },
+  "Al Nahda|Silicon Oasis": {
+    "distance_km": 25.32,
+    "duration_min": 24.6
+  },
+  "Al Nahda|Dubai Hills": {
+    "distance_km": 32.86,
+    "duration_min": 31.0
+  },
+  "Al Nahda|JVC": {
+    "distance_km": 38.55,
+    "duration_min": 32.8
+  },
+  "Al Nahda|Jebel Ali": {
+    "distance_km": 41.49,
+    "duration_min": 38.6
+  },
+  "Al Nahda|Dubai South": {
+    "distance_km": 60.21,
+    "duration_min": 50.2
+  },
+  "Al Nahda|Ras Al Khor": {
+    "distance_km": 17.0,
+    "duration_min": 21.4
+  },
+  "Al Nahda|Sharjah": {
+    "distance_km": 13.01,
+    "duration_min": 16.2
+  },
+  "Mirdif|Downtown": {
+    "distance_km": 20.26,
+    "duration_min": 21.0
+  },
+  "Mirdif|Business Bay": {
+    "distance_km": 21.16,
+    "duration_min": 20.2
+  },
+  "Mirdif|DIFC": {
+    "distance_km": 20.19,
+    "duration_min": 21.6
+  },
+  "Mirdif|Bur Dubai": {
+    "distance_km": 17.32,
+    "duration_min": 19.3
+  },
+  "Mirdif|Deira": {
+    "distance_km": 15.45,
+    "duration_min": 17.8
+  },
+  "Mirdif|Jumeirah": {
+    "distance_km": 28.29,
+    "duration_min": 27.9
+  },
+  "Mirdif|Al Barsha": {
+    "distance_km": 37.36,
+    "duration_min": 33.4
+  },
+  "Mirdif|Al Quoz": {
+    "distance_km": 28.02,
+    "duration_min": 28.4
+  },
+  "Mirdif|Marina": {
+    "distance_km": 41.13,
+    "duration_min": 38.6
+  },
+  "Mirdif|Palm Jumeirah": {
+    "distance_km": 42.04,
+    "duration_min": 39.8
+  },
+  "Mirdif|DXB Airport": {
+    "distance_km": 12.03,
+    "duration_min": 14.7
+  },
+  "Mirdif|Al Nahda": {
+    "distance_km": 12.67,
+    "duration_min": 17.1
+  },
+  "Mirdif|Silicon Oasis": {
+    "distance_km": 22.34,
+    "duration_min": 22.1
+  },
+  "Mirdif|Dubai Hills": {
+    "distance_km": 31.18,
+    "duration_min": 29.3
+  },
+  "Mirdif|JVC": {
+    "distance_km": 35.57,
+    "duration_min": 30.3
+  },
+  "Mirdif|Jebel Ali": {
+    "distance_km": 47.04,
+    "duration_min": 40.4
+  },
+  "Mirdif|Dubai South": {
+    "distance_km": 57.23,
+    "duration_min": 47.7
+  },
+  "Mirdif|Ras Al Khor": {
+    "distance_km": 15.43,
+    "duration_min": 19.6
+  },
+  "Mirdif|Sharjah": {
+    "distance_km": 21.41,
+    "duration_min": 23.3
+  },
+  "Silicon Oasis|Downtown": {
+    "distance_km": 18.93,
+    "duration_min": 18.8
+  },
+  "Silicon Oasis|Business Bay": {
+    "distance_km": 16.53,
+    "duration_min": 17.8
+  },
+  "Silicon Oasis|DIFC": {
+    "distance_km": 19.56,
+    "duration_min": 19.7
+  },
+  "Silicon Oasis|Bur Dubai": {
+    "distance_km": 20.58,
+    "duration_min": 19.9
+  },
+  "Silicon Oasis|Deira": {
+    "distance_km": 22.88,
+    "duration_min": 22.7
+  },
+  "Silicon Oasis|Jumeirah": {
+    "distance_km": 23.35,
+    "duration_min": 25.6
+  },
+  "Silicon Oasis|Al Barsha": {
+    "distance_km": 26.78,
+    "duration_min": 23.5
+  },
+  "Silicon Oasis|Al Quoz": {
+    "distance_km": 20.46,
+    "duration_min": 25.6
+  },
+  "Silicon Oasis|Marina": {
+    "distance_km": 33.7,
+    "duration_min": 32.5
+  },
+  "Silicon Oasis|Palm Jumeirah": {
+    "distance_km": 34.22,
+    "duration_min": 32.5
+  },
+  "Silicon Oasis|DXB Airport": {
+    "distance_km": 23.05,
+    "duration_min": 21.9
+  },
+  "Silicon Oasis|Al Nahda": {
+    "distance_km": 24.52,
+    "duration_min": 24.0
+  },
+  "Silicon Oasis|Mirdif": {
+    "distance_km": 18.67,
+    "duration_min": 19.8
+  },
+  "Silicon Oasis|Dubai Hills": {
+    "distance_km": 23.23,
+    "duration_min": 21.3
+  },
+  "Silicon Oasis|JVC": {
+    "distance_km": 20.0,
+    "duration_min": 18.0
+  },
+  "Silicon Oasis|Jebel Ali": {
+    "distance_km": 31.47,
+    "duration_min": 28.1
+  },
+  "Silicon Oasis|Dubai South": {
+    "distance_km": 41.67,
+    "duration_min": 35.4
+  },
+  "Silicon Oasis|Ras Al Khor": {
+    "distance_km": 14.43,
+    "duration_min": 17.0
+  },
+  "Silicon Oasis|Sharjah": {
+    "distance_km": 33.26,
+    "duration_min": 30.1
+  },
+  "Dubai Hills|Downtown": {
+    "distance_km": 14.8,
+    "duration_min": 17.5
+  },
+  "Dubai Hills|Business Bay": {
+    "distance_km": 10.6,
+    "duration_min": 14.0
+  },
+  "Dubai Hills|DIFC": {
+    "distance_km": 16.3,
+    "duration_min": 19.2
+  },
+  "Dubai Hills|Bur Dubai": {
+    "distance_km": 19.87,
+    "duration_min": 21.5
+  },
+  "Dubai Hills|Deira": {
+    "distance_km": 23.23,
+    "duration_min": 25.1
+  },
+  "Dubai Hills|Jumeirah": {
+    "distance_km": 11.24,
+    "duration_min": 14.7
+  },
+  "Dubai Hills|Al Barsha": {
+    "distance_km": 11.92,
+    "duration_min": 14.7
+  },
+  "Dubai Hills|Al Quoz": {
+    "distance_km": 8.33,
+    "duration_min": 11.0
+  },
+  "Dubai Hills|Marina": {
+    "distance_km": 17.28,
+    "duration_min": 20.5
+  },
+  "Dubai Hills|Palm Jumeirah": {
+    "distance_km": 18.19,
+    "duration_min": 21.7
+  },
+  "Dubai Hills|DXB Airport": {
+    "distance_km": 28.46,
+    "duration_min": 27.2
+  },
+  "Dubai Hills|Al Nahda": {
+    "distance_km": 28.64,
+    "duration_min": 29.3
+  },
+  "Dubai Hills|Mirdif": {
+    "distance_km": 29.85,
+    "duration_min": 28.8
+  },
+  "Dubai Hills|Silicon Oasis": {
+    "distance_km": 25.29,
+    "duration_min": 25.1
+  },
+  "Dubai Hills|JVC": {
+    "distance_km": 9.99,
+    "duration_min": 12.1
+  },
+  "Dubai Hills|Jebel Ali": {
+    "distance_km": 22.63,
+    "duration_min": 23.7
+  },
+  "Dubai Hills|Dubai South": {
+    "distance_km": 32.11,
+    "duration_min": 31.4
+  },
+  "Dubai Hills|Ras Al Khor": {
+    "distance_km": 20.76,
+    "duration_min": 24.0
+  },
+  "Dubai Hills|Sharjah": {
+    "distance_km": 36.93,
+    "duration_min": 36.7
+  },
+  "JVC|Downtown": {
+    "distance_km": 24.83,
+    "duration_min": 23.7
+  },
+  "JVC|Business Bay": {
+    "distance_km": 19.4,
+    "duration_min": 20.4
+  },
+  "JVC|DIFC": {
+    "distance_km": 26.07,
+    "duration_min": 24.3
+  },
+  "JVC|Bur Dubai": {
+    "distance_km": 29.64,
+    "duration_min": 26.7
+  },
+  "JVC|Deira": {
+    "distance_km": 32.03,
+    "duration_min": 31.5
+  },
+  "JVC|Jumeirah": {
+    "distance_km": 19.94,
+    "duration_min": 19.7
+  },
+  "JVC|Al Barsha": {
+    "distance_km": 10.75,
+    "duration_min": 13.2
+  },
+  "JVC|Al Quoz": {
+    "distance_km": 17.03,
+    "duration_min": 16.9
+  },
+  "JVC|Marina": {
+    "distance_km": 17.68,
+    "duration_min": 22.2
+  },
+  "JVC|Palm Jumeirah": {
+    "distance_km": 18.2,
+    "duration_min": 22.2
+  },
+  "JVC|DXB Airport": {
+    "distance_km": 36.42,
+    "duration_min": 32.5
+  },
+  "JVC|Al Nahda": {
+    "distance_km": 37.89,
+    "duration_min": 34.6
+  },
+  "JVC|Mirdif": {
+    "distance_km": 32.04,
+    "duration_min": 30.4
+  },
+  "JVC|Silicon Oasis": {
+    "distance_km": 18.32,
+    "duration_min": 18.6
+  },
+  "JVC|Dubai Hills": {
+    "distance_km": 8.9,
+    "duration_min": 10.8
+  },
+  "JVC|Jebel Ali": {
+    "distance_km": 15.76,
+    "duration_min": 19.1
+  },
+  "JVC|Dubai South": {
+    "distance_km": 25.96,
+    "duration_min": 26.4
+  },
+  "JVC|Ras Al Khor": {
+    "distance_km": 28.04,
+    "duration_min": 29.2
+  },
+  "JVC|Sharjah": {
+    "distance_km": 46.64,
+    "duration_min": 40.7
+  },
+  "Jebel Ali|Downtown": {
+    "distance_km": 27.45,
+    "duration_min": 24.4
+  },
+  "Jebel Ali|Business Bay": {
+    "distance_km": 27.5,
+    "duration_min": 24.1
+  },
+  "Jebel Ali|DIFC": {
+    "distance_km": 28.68,
+    "duration_min": 25.0
+  },
+  "Jebel Ali|Bur Dubai": {
+    "distance_km": 32.25,
+    "duration_min": 27.3
+  },
+  "Jebel Ali|Deira": {
+    "distance_km": 37.2,
+    "duration_min": 32.3
+  },
+  "Jebel Ali|Jumeirah": {
+    "distance_km": 22.55,
+    "duration_min": 20.4
+  },
+  "Jebel Ali|Al Barsha": {
+    "distance_km": 12.54,
+    "duration_min": 12.9
+  },
+  "Jebel Ali|Al Quoz": {
+    "distance_km": 19.65,
+    "duration_min": 17.5
+  },
+  "Jebel Ali|Marina": {
+    "distance_km": 11.54,
+    "duration_min": 12.7
+  },
+  "Jebel Ali|Palm Jumeirah": {
+    "distance_km": 15.01,
+    "duration_min": 16.1
+  },
+  "Jebel Ali|DXB Airport": {
+    "distance_km": 41.92,
+    "duration_min": 37.5
+  },
+  "Jebel Ali|Al Nahda": {
+    "distance_km": 42.1,
+    "duration_min": 37.8
+  },
+  "Jebel Ali|Mirdif": {
+    "distance_km": 47.88,
+    "duration_min": 41.3
+  },
+  "Jebel Ali|Silicon Oasis": {
+    "distance_km": 31.57,
+    "duration_min": 29.7
+  },
+  "Jebel Ali|Dubai Hills": {
+    "distance_km": 22.1,
+    "duration_min": 21.4
+  },
+  "Jebel Ali|JVC": {
+    "distance_km": 16.71,
+    "duration_min": 18.6
+  },
+  "Jebel Ali|Dubai South": {
+    "distance_km": 22.44,
+    "duration_min": 21.9
+  },
+  "Jebel Ali|Ras Al Khor": {
+    "distance_km": 38.13,
+    "duration_min": 37.7
+  },
+  "Jebel Ali|Sharjah": {
+    "distance_km": 50.39,
+    "duration_min": 45.2
+  },
+  "Dubai South|Downtown": {
+    "distance_km": 43.91,
+    "duration_min": 39.9
+  },
+  "Dubai South|Business Bay": {
+    "distance_km": 43.96,
+    "duration_min": 39.7
+  },
+  "Dubai South|DIFC": {
+    "distance_km": 45.14,
+    "duration_min": 40.5
+  },
+  "Dubai South|Bur Dubai": {
+    "distance_km": 48.71,
+    "duration_min": 42.8
+  },
+  "Dubai South|Deira": {
+    "distance_km": 53.66,
+    "duration_min": 47.8
+  },
+  "Dubai South|Jumeirah": {
+    "distance_km": 39.01,
+    "duration_min": 35.9
+  },
+  "Dubai South|Al Barsha": {
+    "distance_km": 29.01,
+    "duration_min": 28.5
+  },
+  "Dubai South|Al Quoz": {
+    "distance_km": 36.11,
+    "duration_min": 33.1
+  },
+  "Dubai South|Marina": {
+    "distance_km": 28.0,
+    "duration_min": 28.2
+  },
+  "Dubai South|Palm Jumeirah": {
+    "distance_km": 31.47,
+    "duration_min": 31.6
+  },
+  "Dubai South|DXB Airport": {
+    "distance_km": 60.33,
+    "duration_min": 52.9
+  },
+  "Dubai South|Al Nahda": {
+    "distance_km": 58.56,
+    "duration_min": 53.3
+  },
+  "Dubai South|Mirdif": {
+    "distance_km": 55.95,
+    "duration_min": 50.9
+  },
+  "Dubai South|Silicon Oasis": {
+    "distance_km": 42.23,
+    "duration_min": 39.0
+  },
+  "Dubai South|Dubai Hills": {
+    "distance_km": 32.18,
+    "duration_min": 33.1
+  },
+  "Dubai South|JVC": {
+    "distance_km": 27.37,
+    "duration_min": 27.9
+  },
+  "Dubai South|Jebel Ali": {
+    "distance_km": 17.72,
+    "duration_min": 21.9
+  },
+  "Dubai South|Ras Al Khor": {
+    "distance_km": 51.95,
+    "duration_min": 49.7
+  },
+  "Dubai South|Sharjah": {
+    "distance_km": 66.85,
+    "duration_min": 60.7
+  },
+  "Ras Al Khor|Downtown": {
+    "distance_km": 12.24,
+    "duration_min": 17.9
+  },
+  "Ras Al Khor|Business Bay": {
+    "distance_km": 11.74,
+    "duration_min": 15.0
+  },
+  "Ras Al Khor|DIFC": {
+    "distance_km": 13.97,
+    "duration_min": 19.8
+  },
+  "Ras Al Khor|Bur Dubai": {
+    "distance_km": 16.08,
+    "duration_min": 21.7
+  },
+  "Ras Al Khor|Deira": {
+    "distance_km": 14.39,
+    "duration_min": 21.0
+  },
+  "Ras Al Khor|Jumeirah": {
+    "distance_km": 18.56,
+    "duration_min": 22.8
+  },
+  "Ras Al Khor|Al Barsha": {
+    "distance_km": 27.92,
+    "duration_min": 28.1
+  },
+  "Ras Al Khor|Al Quoz": {
+    "distance_km": 18.59,
+    "duration_min": 23.2
+  },
+  "Ras Al Khor|Marina": {
+    "distance_km": 31.4,
+    "duration_min": 33.5
+  },
+  "Ras Al Khor|Palm Jumeirah": {
+    "distance_km": 32.31,
+    "duration_min": 34.7
+  },
+  "Ras Al Khor|DXB Airport": {
+    "distance_km": 16.5,
+    "duration_min": 21.6
+  },
+  "Ras Al Khor|Al Nahda": {
+    "distance_km": 17.44,
+    "duration_min": 23.9
+  },
+  "Ras Al Khor|Mirdif": {
+    "distance_km": 16.56,
+    "duration_min": 22.3
+  },
+  "Ras Al Khor|Silicon Oasis": {
+    "distance_km": 19.67,
+    "duration_min": 23.5
+  },
+  "Ras Al Khor|Dubai Hills": {
+    "distance_km": 21.75,
+    "duration_min": 24.1
+  },
+  "Ras Al Khor|JVC": {
+    "distance_km": 28.74,
+    "duration_min": 29.5
+  },
+  "Ras Al Khor|Jebel Ali": {
+    "distance_km": 36.75,
+    "duration_min": 36.8
+  },
+  "Ras Al Khor|Dubai South": {
+    "distance_km": 47.23,
+    "duration_min": 44.9
+  },
+  "Ras Al Khor|Sharjah": {
+    "distance_km": 25.74,
+    "duration_min": 31.4
+  },
+  "Sharjah|Downtown": {
+    "distance_km": 25.29,
+    "duration_min": 26.9
+  },
+  "Sharjah|Business Bay": {
+    "distance_km": 29.91,
+    "duration_min": 28.1
+  },
+  "Sharjah|DIFC": {
+    "distance_km": 23.2,
+    "duration_min": 25.6
+  },
+  "Sharjah|Bur Dubai": {
+    "distance_km": 19.16,
+    "duration_min": 21.1
+  },
+  "Sharjah|Deira": {
+    "distance_km": 14.84,
+    "duration_min": 16.9
+  },
+  "Sharjah|Jumeirah": {
+    "distance_km": 31.33,
+    "duration_min": 31.1
+  },
+  "Sharjah|Al Barsha": {
+    "distance_km": 40.16,
+    "duration_min": 38.0
+  },
+  "Sharjah|Al Quoz": {
+    "distance_km": 33.37,
+    "duration_min": 32.4
+  },
+  "Sharjah|Marina": {
+    "distance_km": 44.17,
+    "duration_min": 41.9
+  },
+  "Sharjah|Palm Jumeirah": {
+    "distance_km": 45.08,
+    "duration_min": 43.1
+  },
+  "Sharjah|DXB Airport": {
+    "distance_km": 12.17,
+    "duration_min": 13.6
+  },
+  "Sharjah|Al Nahda": {
+    "distance_km": 11.93,
+    "duration_min": 14.8
+  },
+  "Sharjah|Mirdif": {
+    "distance_km": 20.84,
+    "duration_min": 20.9
+  },
+  "Sharjah|Silicon Oasis": {
+    "distance_km": 32.86,
+    "duration_min": 28.1
+  },
+  "Sharjah|Dubai Hills": {
+    "distance_km": 39.94,
+    "duration_min": 37.2
+  },
+  "Sharjah|JVC": {
+    "distance_km": 46.09,
+    "duration_min": 36.3
+  },
+  "Sharjah|Jebel Ali": {
+    "distance_km": 49.53,
+    "duration_min": 45.1
+  },
+  "Sharjah|Dubai South": {
+    "distance_km": 67.76,
+    "duration_min": 53.7
+  },
+  "Sharjah|Ras Al Khor": {
+    "distance_km": 26.48,
+    "duration_min": 25.6
+  }
+}
