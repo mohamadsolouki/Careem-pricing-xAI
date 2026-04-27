@@ -66,7 +66,14 @@ summary_columns = st.columns(4, gap="small")
 summary_columns[0].metric("Filtered rides", f"{len(filtered_raw):,}")
 summary_columns[1].metric("Average fare", f"AED {filtered_raw['final_price_aed'].mean():.2f}")
 summary_columns[2].metric("Average demand", f"{filtered_raw['demand_index'].mean():.2f}")
-summary_columns[3].metric("Avg supply pressure", f"{filtered_raw['supply_pressure_index'].mean():.2f}")
+summary_columns[3].metric("Avg traffic index", f"{filtered_raw['traffic_index'].mean():.2f}")
+
+if len(filtered_raw) < 50:
+    st.warning(
+        f"Only {len(filtered_raw)} rides match the current filters. "
+        "SHAP charts and partial-dependence plots may be noisy or blank for rare filter combinations. "
+        "Try relaxing one filter (e.g. set Month to 'All') to get a more representative sample."
+    )
 
 st.markdown("<br>", unsafe_allow_html=True)
 tab_global, tab_zone, tab_time, tab_event = st.tabs(["Global view", "Zone lens", "Time lens", "Event lens"])
@@ -85,7 +92,7 @@ with tab_global:
 with tab_zone:
     zone_summary = (
         filtered_raw.groupby("pickup_zone")
-        .agg(rides=("final_price_aed", "size"), avg_fare=("final_price_aed", "mean"), avg_demand=("demand_index", "mean"), avg_supply_pressure=("supply_pressure_index", "mean"))
+        .agg(rides=("final_price_aed", "size"), avg_fare=("final_price_aed", "mean"), avg_demand=("demand_index", "mean"), avg_traffic=("traffic_index", "mean"))
         .reset_index()
         .sort_values("avg_fare", ascending=False)
     )
@@ -188,7 +195,7 @@ with tab_event:
     )
     event_stats = (
         event_subset.groupby("event_group")
-        .agg(rides=("final_price_aed", "size"), avg_fare=("final_price_aed", "mean"), avg_demand=("demand_index", "mean"), avg_supply_pressure=("supply_pressure_index", "mean"))
+        .agg(rides=("final_price_aed", "size"), avg_fare=("final_price_aed", "mean"), avg_demand=("demand_index", "mean"), avg_traffic=("traffic_index", "mean"))
         .reset_index()
         .sort_values("avg_fare", ascending=False)
     )

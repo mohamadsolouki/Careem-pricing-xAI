@@ -49,6 +49,32 @@ PAYMENT_METHODS = ["Credit Card", "Cash", "Careem Pay", "Careem Plus"]
 
 RAMADAN_START = pd.Timestamp("2025-03-01")
 RAMADAN_END   = pd.Timestamp("2025-03-29")
+
+# Year-agnostic Ramadan window lookup (add future years as needed)
+# Dates shift ~11 days earlier each year.
+_RAMADAN_WINDOWS: dict[int, tuple[str, str]] = {
+    2024: ("2024-03-11", "2024-04-09"),
+    2025: ("2025-03-01", "2025-03-29"),
+    2026: ("2026-02-18", "2026-03-19"),
+    2027: ("2027-02-07", "2027-03-08"),
+    2028: ("2028-01-27", "2028-02-25"),
+}
+
+
+def _is_ramadan_date(dt: pd.Timestamp) -> bool:
+    """Return True if dt falls within Ramadan for its year."""
+    window = _RAMADAN_WINDOWS.get(dt.year)
+    if window is None:
+        # Fallback: use the 2025 window shifted by ~11 days per year delta
+        base_start = pd.Timestamp("2025-03-01")
+        base_end   = pd.Timestamp("2025-03-29")
+        delta_days = (dt.year - 2025) * (-11)
+        window_start = base_start + pd.Timedelta(days=delta_days)
+        window_end   = base_end   + pd.Timedelta(days=delta_days)
+    else:
+        window_start = pd.Timestamp(window[0])
+        window_end   = pd.Timestamp(window[1])
+    return bool(window_start <= dt.normalize() <= window_end)
 UAE_HOLIDAYS = {
     "2025-01-01", "2025-03-30", "2025-03-31", "2025-04-01", "2025-04-02",
     "2025-04-03", "2025-06-05", "2025-06-06", "2025-06-07", "2025-06-08",
@@ -214,7 +240,7 @@ def get_time_context(ride_dt: datetime | pd.Timestamp) -> dict[str, object]:
     is_late_night = hour >= 22 or hour < 6
     is_offpeak    = not is_peak_hour and not is_late_night
     cal_str       = actual_dt.strftime("%Y-%m-%d")
-    is_ramadan     = bool(RAMADAN_START <= actual_dt.normalize() <= RAMADAN_END)
+    is_ramadan     = _is_ramadan_date(actual_dt)
     is_suhoor      = bool(is_ramadan and 1 <= hour <= 3)
     is_iftar       = bool(is_ramadan and hour == 17)
     is_public_holiday = cal_str in UAE_HOLIDAYS

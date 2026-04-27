@@ -29,8 +29,8 @@ st.set_page_config(page_title="XPrice Rider Simulator", layout="wide")
 apply_theme()
 
 today = datetime.now()
-default_day = min(today.day, monthrange(2025, today.month)[1])
-default_date = date(2025, today.month, default_day)
+default_day = min(today.day, monthrange(today.year, today.month)[1])
+default_date = date(today.year, today.month, default_day)
 
 hero(
     "Ride Simulator",
@@ -74,6 +74,28 @@ with st.sidebar:
 
 st.session_state["pickup_point"] = (pickup_lat, pickup_lon)
 st.session_state["dropoff_point"] = (dropoff_lat, dropoff_lon)
+
+# ── Coordinate bounds check (Dubai / Sharjah bounding box) ───────────────────
+_DUBAI_LAT = (24.6, 25.4)
+_DUBAI_LON = (54.9, 56.0)
+
+def _out_of_bounds(lat: float, lon: float) -> bool:
+    return not (_DUBAI_LAT[0] <= lat <= _DUBAI_LAT[1] and _DUBAI_LON[0] <= lon <= _DUBAI_LON[1])
+
+if _out_of_bounds(pickup_lat, pickup_lon):
+    st.error(
+        f"Pickup coordinates ({pickup_lat:.4f}, {pickup_lon:.4f}) are outside the Dubai/Sharjah "
+        f"service area (lat {_DUBAI_LAT[0]}–{_DUBAI_LAT[1]}, lon {_DUBAI_LON[0]}–{_DUBAI_LON[1]}). "
+        "Please reposition the pin on the map."
+    )
+    st.stop()
+if _out_of_bounds(dropoff_lat, dropoff_lon):
+    st.error(
+        f"Dropoff coordinates ({dropoff_lat:.4f}, {dropoff_lon:.4f}) are outside the Dubai/Sharjah "
+        f"service area (lat {_DUBAI_LAT[0]}–{_DUBAI_LAT[1]}, lon {_DUBAI_LON[0]}–{_DUBAI_LON[1]}). "
+        "Please reposition the pin on the map."
+    )
+    st.stop()
 
 ride_dt = datetime.combine(ride_date, ride_time)
 pickup_point = st.session_state["pickup_point"]
@@ -144,7 +166,7 @@ with top_right:
 
     card(
         "Context snapshot",
-        f"<strong>Weather:</strong> {record['weather_label']} ({record['weather_source']}) &nbsp;·&nbsp; <strong>Traffic:</strong> {record['traffic_condition']} ({record['traffic_source']}) &nbsp;·&nbsp; <strong>Event:</strong> {record['active_event']} &nbsp;·&nbsp; <strong>Availability:</strong> {record['captain_availability_score']:.2f}",
+        f"<strong>Weather:</strong> {record['weather_label']} ({record['weather_source']}) &nbsp;·&nbsp; <strong>Traffic:</strong> {record['traffic_condition']} ({record['traffic_source']}) &nbsp;·&nbsp; <strong>Event:</strong> {record['active_event']} &nbsp;·&nbsp; <strong>Demand index:</strong> {record['demand_index']:.2f} &nbsp;·&nbsp; <strong>Availability:</strong> {record['captain_availability_score']:.2f} <em>(informational — not a model input)</em>",
     )
     st.markdown(f"**{explanation['headline']}**")
     for sentence in explanation["sentences"]:

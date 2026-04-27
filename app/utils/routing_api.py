@@ -76,11 +76,15 @@ def _synthetic_traffic(
       0.82 + 0.32*peak + 0.10*weekend + 0.14*(event-1)
           + 0.10*(weather-1) + 0.08*airport + 0.06*efficiency_clip + N(0,0.04)
     """
+    # Round to the nearest 5-minute bucket so repeated "Estimate" clicks in the
+    # same window return the same synthetic traffic value (deterministic UX).
+    bucket_dt = ride_dt.replace(second=0, microsecond=0)
+    bucket_dt = bucket_dt.replace(minute=(ride_dt.minute // 5) * 5)
     rng = stable_rng(
         "synthetic-traffic",
         round(pickup_lat, 4), round(pickup_lon, 4),
         round(dropoff_lat, 4), round(dropoff_lon, 4),
-        ride_dt.isoformat(),
+        bucket_dt.isoformat(),
     )
     # UAE work week Mon–Fri (0–4); weekend = Saturday (5) + Sunday (6)
     is_peak    = (8 <= ride_dt.hour < 10) or (16 <= ride_dt.hour < 20)

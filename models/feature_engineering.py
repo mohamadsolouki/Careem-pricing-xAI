@@ -93,7 +93,13 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
         frame["traffic_x_peak"] = frame["traffic_index"] * frame["is_peak_hour"].astype(int)
 
     if {"demand_index", "traffic_index"}.issubset(frame.columns):
-        frame["demand_x_traffic"] = frame["demand_index"] * frame["traffic_index"]
+        # NOTE: demand_x_traffic removed — demand_index and traffic_index both
+        # embed weather/event signals, so their product created a soft leakage
+        # path. Replaced with distance × traffic which is orthogonal to surge.
+        pass
+
+    if {"route_distance_km", "traffic_index"}.issubset(frame.columns):
+        frame["distance_x_traffic"] = frame["route_distance_km"] * frame["traffic_index"]
 
     if {"route_efficiency_ratio", "traffic_index"}.issubset(frame.columns):
         frame["efficiency_x_traffic"] = frame["route_efficiency_ratio"] * frame["traffic_index"]

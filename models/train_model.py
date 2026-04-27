@@ -18,7 +18,9 @@ import os
 import sys
 import json
 import pickle
+import hashlib
 import warnings
+import datetime as _dt
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -65,6 +67,40 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.20, random_state=42, stratify=month_labels
 )
 print(f"  Train: {len(X_train):,} | Test: {len(X_test):,}")
+
+# ─── 4b. Time-series block cross-validation (5-fold expanding window) ────────
+print("Running 5-fold time-series block CV...")
+_sorted_months = sorted(df["month"].unique())
+_n_months = len(_sorted_months)
+_fold_size = max(1, _n_months // 5)   # ~2-3 months per fold
+cv_r2_scores = []
+for _fold in range(5):
+    _train_end = _fold_size * (_fold + 3)          # expanding window: at least 3 months of history
+    _test_start = _train_end
+    _test_end   = _test_start + _fold_size
+    if _test_start >= _n_months:
+        break
+    _train_months = _sorted_months[:_train_end]
+    _test_months  = _sorted_months[_test_start:_test_end]
+    _tr_mask = np.isin(month_labels, _train_months)
+    _te_mask = np.isin(month_labels, _test_months)
+    if _tr_mask.sum() == 0 or _te_mask.sum() == 0:
+        break
+    _cv_model = xgb.XGBRegressor(
+        n_estimators=400, max_depth=7, learning_rate=0.05,
+        subsample=0.85, colsample_bytree=0.80, min_child_weight=5,
+        reg_alpha=0.5, reg_lambda=1.5, objective="reg:squarederror",
+        tree_method="hist", random_state=42, n_jobs=-1, verbosity=0,
+    )
+    _cv_model.fit(X.iloc[_tr_mask], y.iloc[_tr_mask])
+    _cv_pred = _cv_model.predict(X.iloc[_te_mask])
+    _fold_r2 = r2_score(y.iloc[_te_mask], _cv_pred)
+    cv_r2_scores.append(_fold_r2)
+    print(f"  Fold {_fold+1}: train months {_train_months[:3]}…{_train_months[-1]}, "
+          f"test months {_test_months} → R²={_fold_r2:.4f}")
+if cv_r2_scores:
+    print(f"  CV R² mean={np.mean(cv_r2_scores):.4f}  std={np.std(cv_r2_scores):.4f}  "
+          f"min={np.min(cv_r2_scores):.4f}  max={np.max(cv_r2_scores):.4f}")
 
 # ─── 5. XGBoost Training ─────────────────────────────────────────────────────
 print("Training XGBoost regressor...")
@@ -113,6 +149,11 @@ test_metrics  = calc_metrics(y_test,  y_pred_test,  "TEST ")
 metrics = {
     "train": {k: round(float(v), 4) for k, v in train_metrics.items()},
     "test":  {k: round(float(v), 4) for k, v in test_metrics.items()},
+    "cv": {
+        "r2_scores": [round(float(v), 4) for v in cv_r2_scores],
+        "r2_mean":   round(float(np.mean(cv_r2_scores)), 4) if cv_r2_scores else None,
+        "r2_std":    round(float(np.std(cv_r2_scores)),  4) if cv_r2_scores else None,
+    },
     "n_features": len(FEATURE_COLS),
     "n_train": int(len(X_train)),
     "n_test":  int(len(X_test)),
@@ -123,7 +164,30 @@ metrics_path = os.path.join(SAVE_DIR, "model_metrics.json")
 with open(metrics_path, "w") as f:
     json.dump(metrics, f, indent=2)
 print(f"  Metrics saved → {metrics_path}")
+# ─── Model versioning metadata ────────────────────────────────────────────────
+_dataset_hash = hashlib.md5(open(DATA_PATH, "rb").read(1 << 20)).hexdigest()  # first 1 MB for speed
+try:
+    import subprocess
+    _git_commit = subprocess.check_output(
+        ["git", "rev-parse", "--short", "HEAD"], cwd=BASE_DIR, stderr=subprocess.DEVNULL,
+    ).decode().strip()
+except Exception:
+    _git_commit = "unknown"
 
+_version_meta = {
+    "training_date":  _dt.datetime.now().isoformat(timespec="seconds"),
+    "dataset_path":   DATA_PATH,
+    "dataset_hash_md5_first1MB": _dataset_hash,
+    "git_commit":     _git_commit,
+    "n_rows_total":   len(df),
+    "n_features":     len(FEATURE_COLS),
+    "test_r2":        metrics["test"]["r2"],
+    "cv_r2_mean":     metrics["cv"]["r2_mean"],
+}
+version_path = os.path.join(SAVE_DIR, "model_version.json")
+with open(version_path, "w") as f:
+    json.dump(_version_meta, f, indent=2)
+print(f"  Version metadata saved \u2192 {version_path}")
 # ─── 7. Feature Importance Plot ───────────────────────────────────────────────
 print("Plotting feature importance (top 30)...")
 importance = pd.Series(model.feature_importances_, index=FEATURE_COLS)

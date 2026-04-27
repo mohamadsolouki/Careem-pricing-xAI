@@ -10,19 +10,19 @@ def _feature_group(feature_name: str, record: dict[str, object]) -> str:
         return "Distance"
     if feature_name in {"salik_gates", "salik_cost_aed"}:
         return "Toll roads"
-    if feature_name in {"demand_index", "event_demand_multiplier", "event_x_peak"} or feature_name.startswith("event_type_"):
-        return "Event and city demand"
-    if feature_name in {"captain_availability_score", "supply_pressure_index", "wait_time_min", "airport_x_peak", "pickup_density_score", "dropoff_density_score"}:
-        return "Captain availability"
+    if feature_name in {"demand_index", "event_demand_multiplier", "event_x_peak", "pickup_density_score", "dropoff_density_score"} or feature_name.startswith("event_type_"):
+        return "Demand pressure"
+    if feature_name in {"airport_x_peak", "is_airport_ride"}:
+        return "Airport & peak demand"
     if feature_name in {"is_peak_hour", "is_late_night", "hour_sin", "hour_cos", "dow_sin", "dow_cos", "month_sin", "month_cos", "ramadan_x_hour"}:
         return "Time of day"
     if feature_name in {"is_rain", "is_sandstorm", "weather_demand_factor", "rain_x_peak", "storm_x_peak", "temperature_c", "humidity_pct"}:
         return "Weather"
-    if feature_name in {"booking_fee_aed", "is_hala_product"} or feature_name.startswith("product_type_"):
+    if feature_name in {"is_hala_product"} or feature_name.startswith("product_type_"):
         return "Selected product"
-    if feature_name in {"pickup_lat", "pickup_lon", "dropoff_lat", "dropoff_lon", "route_mid_lat", "route_mid_lon", "lat_delta", "lon_delta", "route_bearing_deg", "bearing_sin", "bearing_cos", "is_airport_ride", "is_intrazone_trip"}:
+    if feature_name in {"pickup_lat", "pickup_lon", "dropoff_lat", "dropoff_lon", "route_mid_lat", "route_mid_lon", "lat_delta", "lon_delta", "route_bearing_deg", "bearing_sin", "bearing_cos", "is_intrazone_trip"}:
         return "Route geography"
-    if feature_name in {"trip_duration_min", "avg_speed_kmh", "traffic_index", "traffic_x_peak", "demand_x_traffic", "efficiency_x_traffic"}:
+    if feature_name in {"traffic_index", "traffic_x_peak", "distance_x_traffic", "efficiency_x_traffic"}:
         return "Traffic conditions"
     return feature_name.replace("_", " ").title()
 
@@ -63,7 +63,9 @@ def build_explanation(record: dict[str, object], contribution_series: pd.Series,
     if event_name != "None":
         sentences.append(f"Event overlay: {event_name} is active, which raises demand pressure around the city.")
     sentences.append(
-        f"Weather context: {weather_label} from the {record.get('weather_source', 'seasonal')} feed. Traffic is {record.get('traffic_condition', 'moderate').lower()} from the {record.get('traffic_source', 'synthetic')} source, with demand index {record['demand_index']:.2f} and availability score {record['captain_availability_score']:.2f}."
+        f"Weather context: {weather_label} from the {record.get('weather_source', 'seasonal')} feed. "
+        f"Traffic is {record.get('traffic_condition', 'moderate').lower()} (index {record['traffic_index']:.2f}) "
+        f"from the {record.get('traffic_source', 'synthetic')} source, with demand index {record['demand_index']:.2f}."
     )
 
     return {

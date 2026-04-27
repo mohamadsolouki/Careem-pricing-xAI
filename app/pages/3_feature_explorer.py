@@ -57,7 +57,7 @@ with left:
 
 with right:
     section_header("Partial dependence (marginal response)")
-    baseline_row = sample_features.iloc[[0]].copy()
+    baseline_row = sample_features.mean().to_frame().T.reset_index(drop=True)
     low = float(sample_features[selected_feature].quantile(0.05))
     high = float(sample_features[selected_feature].quantile(0.95))
     sweep_values = np.linspace(low, high, 30)
@@ -95,12 +95,12 @@ st.divider()
 section_header("What-if lab")
 
 today = datetime.now()
-default_day = min(today.day, monthrange(2025, today.month)[1])
-default_date = date(2025, today.month, default_day)
+default_day = min(today.day, monthrange(today.year, today.month)[1])
+default_date = date(today.year, today.month, default_day)
 
 card(
     "How to use the lab",
-    "Set pickup and dropoff coordinates, choose a product and time, then drag the override sliders to explore how distance, traffic, and captain availability change the predicted fare. The waterfall below shows exactly how each factor contributes.",
+    "Set pickup and dropoff coordinates, choose a product and time, then drag the override sliders to explore how distance, traffic, and demand change the predicted fare. The waterfall below shows exactly how each factor contributes.",
 )
 
 control_columns = st.columns(4)
@@ -122,6 +122,16 @@ control_columns_3 = st.columns(2)
 use_live_traffic = control_columns_3[0].toggle("Use live traffic", value=False, key="whatif_traffic_toggle")
 control_columns_3[1].caption("Live traffic uses TomTom when configured and only for today's date; otherwise the app falls back to the synthetic traffic model.")
 
+_DUBAI_LAT = (24.6, 25.4)
+_DUBAI_LON = (54.9, 56.0)
+for _name, _lat, _lon in [("Pickup", pickup_lat, pickup_lon), ("Dropoff", dropoff_lat, dropoff_lon)]:
+    if not (_DUBAI_LAT[0] <= _lat <= _DUBAI_LAT[1] and _DUBAI_LON[0] <= _lon <= _DUBAI_LON[1]):
+        st.error(
+            f"{_name} coordinates ({_lat:.4f}, {_lon:.4f}) are outside the Dubai/Sharjah service area. "
+            f"Valid range: lat {_DUBAI_LAT[0]}–{_DUBAI_LAT[1]}, lon {_DUBAI_LON[0]}–{_DUBAI_LON[1]}."
+        )
+        st.stop()
+
 scenario_dt = datetime.combine(ride_date, ride_time)
 weather = get_weather(pickup_lat, pickup_lon, scenario_dt, prefer_live=use_live_weather)
 route_context = get_route_context(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, scenario_dt, prefer_live_traffic=use_live_traffic)
@@ -142,18 +152,18 @@ section_header("Manual overrides")
 override_columns = st.columns(3)
 distance_override = override_columns[0].slider("Distance override (km)", min_value=1.0, max_value=65.0, value=round(float(scenario_record["route_distance_km"]), 1), step=0.1)
 traffic_override = override_columns[1].slider("Traffic index override", min_value=0.65, max_value=2.20, value=round(float(scenario_record["traffic_index"]), 2), step=0.01)
-availability_override = override_columns[2].slider("Availability override", min_value=0.15, max_value=1.0, value=round(float(scenario_record["captain_availability_score"]), 2), step=0.01)
+demand_override_col3 = override_columns[2].slider("Demand index override", min_value=0.75, max_value=3.0, value=round(float(scenario_record["demand_index"]), 2), step=0.01)
 
-demand_override = st.slider("Demand index override", min_value=0.75, max_value=3.0, value=round(float(scenario_record["demand_index"]), 2), step=0.01)
+demand_override = st.slider("Global demand override", min_value=0.75, max_value=3.0, value=round(float(scenario_record["demand_index"]), 2), step=0.01, key="whatif_demand_global", label_visibility="collapsed")
 
 scenario_record["route_distance_km"] = round(distance_override, 2)
 scenario_record["traffic_index"] = round(traffic_override, 3)
 scenario_record["route_efficiency_ratio"] = round(distance_override / max(float(scenario_record["route_direct_distance_km"]), 0.5), 3)
 scenario_record["avg_speed_kmh"] = round(max(12.0, min(78.0, 52.0 / max(traffic_override, 0.65))), 1)
 scenario_record["trip_duration_min"] = round(distance_override / max(float(scenario_record["avg_speed_kmh"]), 1.0) * 60, 1)
-scenario_record["demand_index"] = round(demand_override, 3)
-scenario_record["captain_availability_score"] = round(availability_override, 3)
-scenario_record["supply_pressure_index"] = round(1.0 - availability_override, 3)
+scenario_record["demand_index"] = round(demand_override_col3, 3)
+scenario_record["captain_availability_score"] = round(max(0.15, min(1.0, 1.0 - 0.32 * (demand_override_col3 - 1.0))), 3)
+scenario_record["supply_pressure_index"] = round(1.0 - scenario_record["captain_availability_score"], 3)
 scenario_record["wait_time_min"] = round(max(1.0, scenario_record["wait_time_min"] * (1.05 + scenario_record["supply_pressure_index"] * 0.25)), 1)
 
 feature_frame, _ = build_inference_frame(scenario_record, feature_columns)

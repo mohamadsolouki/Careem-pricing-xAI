@@ -349,11 +349,12 @@ for ev in EVENTS:
                 event_multiplier_for_zone(ev, z_name),
             )
 
-# Jitter coordinates within zone (realistic scatter)
-pickup_lat  = Z_LAT[pu_idx] + np.random.normal(0, 0.012, N_RIDES)
-pickup_lon  = Z_LON[pu_idx] + np.random.normal(0, 0.012, N_RIDES)
-dropoff_lat = Z_LAT[do_idx] + np.random.normal(0, 0.012, N_RIDES)
-dropoff_lon = Z_LON[do_idx] + np.random.normal(0, 0.012, N_RIDES)
+# Jitter coordinates within zone (σ=0.005° ≈ 550 m — tight enough to stay inside
+# most zone polygons even for compact zones like DIFC / Business Bay)
+pickup_lat  = Z_LAT[pu_idx] + np.random.normal(0, 0.005, N_RIDES)
+pickup_lon  = Z_LON[pu_idx] + np.random.normal(0, 0.005, N_RIDES)
+dropoff_lat = Z_LAT[do_idx] + np.random.normal(0, 0.005, N_RIDES)
+dropoff_lon = Z_LON[do_idx] + np.random.normal(0, 0.005, N_RIDES)
 
 # ── 5. Distances and Salik ────────────────────────────────────────────────────
 print("Computing distances and Salik gates...")
