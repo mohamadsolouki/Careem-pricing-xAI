@@ -1,82 +1,82 @@
 [
   {
     "feature": "route_distance_km",
-    "mean_abs_shap": 20.7421
+    "mean_abs_shap": 14.6635
+  },
+  {
+    "feature": "distance_x_traffic",
+    "mean_abs_shap": 14.5561
   },
   {
     "feature": "is_hala_product",
-    "mean_abs_shap": 14.6526
-  },
-  {
-    "feature": "route_direct_distance_km",
-    "mean_abs_shap": 6.9657
-  },
-  {
-    "feature": "product_type_Premier",
-    "mean_abs_shap": 4.6403
-  },
-  {
-    "feature": "product_type_MAX",
-    "mean_abs_shap": 4.3563
+    "mean_abs_shap": 14.3068
   },
   {
     "feature": "demand_index",
-    "mean_abs_shap": 4.236
+    "mean_abs_shap": 5.024
   },
   {
-    "feature": "demand_x_traffic",
-    "mean_abs_shap": 3.2566
+    "feature": "product_type_Premier",
+    "mean_abs_shap": 4.5206
+  },
+  {
+    "feature": "product_type_MAX",
+    "mean_abs_shap": 4.2588
   },
   {
     "feature": "salik_gates",
-    "mean_abs_shap": 2.7807
-  },
-  {
-    "feature": "distance_gap_km",
-    "mean_abs_shap": 2.2306
-  },
-  {
-    "feature": "product_type_Executive",
-    "mean_abs_shap": 2.1706
+    "mean_abs_shap": 2.6949
   },
   {
     "feature": "product_type_Hala Taxi",
-    "mean_abs_shap": 1.8891
+    "mean_abs_shap": 2.2939
+  },
+  {
+    "feature": "product_type_Executive",
+    "mean_abs_shap": 2.1597
   },
   {
     "feature": "product_type_Comfort",
-    "mean_abs_shap": 1.8414
+    "mean_abs_shap": 1.9187
+  },
+  {
+    "feature": "route_direct_distance_km",
+    "mean_abs_shap": 1.7014
   },
   {
     "feature": "product_type_Hala MAX",
-    "mean_abs_shap": 1.567
+    "mean_abs_shap": 1.6989
   },
   {
-    "feature": "lon_delta",
-    "mean_abs_shap": 0.9457
+    "feature": "pickup_density_score",
+    "mean_abs_shap": 1.0274
   },
   {
-    "feature": "is_airport_ride",
-    "mean_abs_shap": 0.8335
-  },
-  {
-    "feature": "lat_delta",
-    "mean_abs_shap": 0.7517
+    "feature": "traffic_index",
+    "mean_abs_shap": 0.7824
   },
   {
     "feature": "product_type_Eco Friendly",
-    "mean_abs_shap": 0.6763
+    "mean_abs_shap": 0.7165
+  },
+  {
+    "feature": "is_airport_ride",
+    "mean_abs_shap": 0.6859
   },
   {
     "feature": "is_careem_plus",
-    "mean_abs_shap": 0.4096
+    "mean_abs_shap": 0.4483
   },
   {
-    "feature": "is_peak_hour",
-    "mean_abs_shap": 0.3945
+    "feature": "distance_gap_km",
+    "mean_abs_shap": 0.3891
+  },
+  {
+    "feature": "pickup_lon",
+    "mean_abs_shap": 0.3232
   },
   {
     "feature": "is_late_night",
-    "mean_abs_shap": 0.3344
+    "mean_abs_shap": 0.2776
   }
 ]
