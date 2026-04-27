@@ -2,15 +2,29 @@
 
 XPrice is a research-oriented Streamlit application and analytics pipeline for explainable ride-hailing pricing in Dubai. The project generates a synthetic 2025 ride dataset, trains a coordinate-first XGBoost fare model, exports tree contribution artefacts for local and global explanations, and serves a multi-page Streamlit app for rider, operations, and analyst workflows.
 
+## Model Performance
+
+| Metric | Value |
+|--------|-------|
+| Test R² | **0.9885** |
+| Test RMSE | **AED 5.45** |
+| Test MAE | **AED 3.17** |
+| CV R² (5-fold block) | **0.9882 ± 0.0002** |
+| 90% prediction interval | **± AED 7.12** (conformal, exact 90% coverage) |
+| Training rows | 119,970 |
+| Features | 76 |
+| SHAP explanation pool | 5,000 rides |
+
 ## What Is In The Repo
 
 - A synthetic 165,000-row Dubai ride-hailing dataset with 68 columns.
 - A coordinate-first pricing model that learns from route geometry, density, weather, demand, and traffic signals.
-- XAI artefacts built with XGBoost native contribution outputs.
+- XAI artefacts built with XGBoost native tree contribution outputs (no shap library dependency).
+- Conformal prediction intervals (±AED 7.12 for 90% coverage) displayed on every fare quote.
 - A Streamlit app with three pages:
-  - Rider simulator with real map-based pickup and dropoff selection.
-  - Operations dashboard for filtered global contribution analysis.
-  - Feature explorer for coordinate-based what-if testing.
+  - **Rider Simulator**: map-based pickup/dropoff with fare quote, 90% prediction interval, and waterfall explanation.
+  - **Operations Dashboard**: filtered global contribution analysis with zone heatmaps, hourly patterns, event breakdowns, and a residuals tab for model quality audit.
+  - **Feature Explorer**: PDP + ICE curves, SHAP dependence plots, what-if lab with manual overrides, and a **LIME vs SHAP** method comparison panel.
 
 ## Project Structure
 

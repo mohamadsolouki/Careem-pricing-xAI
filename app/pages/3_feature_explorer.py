@@ -19,30 +19,84 @@ for path in (APP_DIR, PROJECT_ROOT):
         sys.path.insert(0, str(path))
 
 from utils.domain import DEFAULT_DROPOFF_POINT, DEFAULT_PICKUP_POINT, PAYMENT_METHODS, PRODUCT_NAMES, build_inference_frame, build_trip_record
-from utils.model_loader import load_feature_columns, load_metrics, load_model, load_shap_bundle
+from utils.model_loader import load_feature_columns, load_metrics, load_model, load_model_version, load_shap_bundle
 from utils.nlp_explainer import build_explanation
 from utils.routing_api import get_route_context
 from utils.shap_engine import compute_local_contributions, plot_dependence, plot_waterfall
-from utils.ui import apply_theme, card, hero, section_header, whatif_result
+from utils.ui import apply_theme, card, hero, section_header, sidebar_brand, whatif_result
 from utils.weather_api import get_weather
+
+
+try:
+    from lime.lime_tabular import LimeTabularExplainer as _LimeTabularExplainer
+    _LIME_AVAILABLE = True
+except ImportError:
+    _LIME_AVAILABLE = False
 
 
 st.set_page_config(page_title="XPrice Feature Explorer", layout="wide")
 apply_theme()
+
+# Load all resources first so they are available for the sidebar and page
+model = load_model()
+feature_columns = load_feature_columns()
+bundle = load_shap_bundle()
+metrics = load_metrics()
+version = load_model_version()
+_pi90_half_width = metrics.get("prediction_interval_90_half_width", 0.0)
+sample_features = bundle["sample_features"].copy()
+contrib_values = bundle["values"]
+
+
+@st.cache_resource(show_spinner=False)
+def _get_lime_explainer():
+    """Build and cache the LIME tabular explainer fitted on the 5k SHAP sample."""
+    if not _LIME_AVAILABLE:
+        return None
+    return _LimeTabularExplainer(
+        training_data=sample_features.values,
+        feature_names=list(feature_columns),
+        mode="regression",
+        random_state=42,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _run_lime_explanation(ride_idx: int, _feature_columns_key: str) -> list:
+    """Return LIME local weights for a single ride. Cached by ride index."""
+    _explainer = _get_lime_explainer()
+    if _explainer is None:
+        return []
+
+    def _predict_fn(arr):
+        return model.predict(pd.DataFrame(arr, columns=feature_columns))
+
+    _exp = _explainer.explain_instance(
+        sample_features.iloc[ride_idx].values,
+        _predict_fn,
+        num_features=12,
+    )
+    return _exp.as_list()
+
+
+# ---- Sidebar ----
+with st.sidebar:
+    sidebar_brand()
+    st.markdown("### Model info")
+    st.markdown(
+        f"- **Test R\u00b2:** {metrics['test']['r2']:.4f}  \n"
+        f"- **RMSE:** AED {metrics['test']['rmse']:.2f}  \n"
+        f"- **CV R\u00b2:** {metrics['cv']['r2_mean']:.4f} \u00b1 {metrics['cv']['r2_std']:.4f}  \n"
+        f"- **90% PI:** \u00b1AED {_pi90_half_width:.2f}"
+    )
+    if version.get("training_date"):
+        st.caption(f"Trained {version['training_date'][:10]}")
 
 hero(
     "Feature Explorer",
     "Analyst workbench",
     "Explore how any single driver influences fares across the full sample. Inspect its SHAP contribution shape, plot the marginal response curve, then run a what-if scenario with custom coordinates and manual overrides for distance, traffic, and supply.",
 )
-
-model = load_model()
-feature_columns = load_feature_columns()
-bundle = load_shap_bundle()
-metrics = load_metrics()
-_pi90_half_width = metrics.get("prediction_interval_90_half_width", 0.0)
-sample_features = bundle["sample_features"].copy()
-contrib_values = bundle["values"]
 
 continuous_features = [
     column
@@ -120,6 +174,70 @@ with right:
     )
     st.plotly_chart(sweep_fig, use_container_width=True)
     st.caption("Gray lines are Individual Conditional Expectation (ICE) curves for 15 random rides. Teal line is the population mean (PDP).")
+
+st.divider()
+section_header("LIME vs SHAP \u2014 Local explanation comparison")
+card(
+    "Method comparison",
+    "SHAP uses Shapley values from cooperative game theory \u2014 guaranteed to be consistent, locally accurate, and globally coherent. "
+    "LIME fits a sparse linear surrogate model on perturbed samples around a single prediction point. "
+    "Both explain <em>why</em> the model predicted a specific fare; the panel below lets you compare them ride-by-ride.",
+)
+_lime_ride_idx = st.slider(
+    "Select ride from the 5,000-ride SHAP sample to explain",
+    0, len(sample_features) - 1, 0, key="lime_ride_idx",
+)
+lime_left, lime_right = st.columns(2, gap="large")
+
+with lime_left:
+    section_header("SHAP (tree contribution decomposition)")
+    _single_frame = sample_features.iloc[[_lime_ride_idx]]
+    _l_contrib, _l_base, _l_pred = compute_local_contributions(model, _single_frame)
+    st.pyplot(plot_waterfall(_l_contrib, _l_base, _l_pred), use_container_width=True)
+    st.caption(f"Predicted: AED {_l_pred:.2f}  \u00b7  Base: AED {_l_base:.2f}")
+
+with lime_right:
+    section_header("LIME (local linear surrogate)")
+    if _LIME_AVAILABLE:
+        with st.spinner("Computing LIME explanation\u2026"):
+            _lime_weights = _run_lime_explanation(_lime_ride_idx, str(feature_columns[:5]))
+        if _lime_weights:
+            _lw_frame = pd.DataFrame(_lime_weights, columns=["feature", "weight"]).sort_values("weight")
+            _lime_bar = px.bar(
+                _lw_frame,
+                y="feature",
+                x="weight",
+                orientation="h",
+                color="weight",
+                color_continuous_scale="RdBu_r",
+                color_continuous_midpoint=0,
+                title="LIME local weights",
+                template="plotly_white",
+            )
+            _lime_bar.update_layout(
+                height=420,
+                margin={"l": 0, "r": 0, "t": 44, "b": 0},
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
+                xaxis={"title": "LIME weight (AED approximation)", "gridcolor": "#f1f5f9"},
+                yaxis={"gridcolor": "#f1f5f9"},
+                coloraxis_showscale=False,
+            )
+            st.plotly_chart(_lime_bar, use_container_width=True)
+            st.caption(
+                "LIME weights are estimates from a local linear model fitted on perturbed samples around this ride. "
+                "Values approximate contribution magnitude but may differ from SHAP due to the linear surrogate assumption."
+            )
+    else:
+        st.info("Install the `lime` package to enable this panel: `pip install lime`")
+
+st.caption(
+    "\u26a0\ufe0f **SHAP vs LIME:** Shapley values satisfy four desirable axioms (efficiency, symmetry, dummy, additivity). "
+    "LIME does not guarantee consistency across runs \u2014 the same feature can receive different weights on repeated calls. "
+    "For tree ensembles, XGBoost\u2019s native `pred_contribs=True` is both exact and orders of magnitude faster "
+    "than LIME\u2019s perturbation approach (Salih et al., 2025)."
+)
 
 st.divider()
 section_header("What-if lab")

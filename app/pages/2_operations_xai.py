@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -14,7 +15,7 @@ for path in (APP_DIR, PROJECT_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from utils.model_loader import load_shap_bundle
+from utils.model_loader import load_feature_columns, load_metrics, load_model, load_model_version, load_shap_bundle
 from utils.shap_engine import build_top_driver_frame, plot_beeswarm, plot_dependence, plot_importance_bar
 from utils.ui import apply_theme, hero, section_header, sidebar_brand
 
@@ -29,6 +30,10 @@ hero(
 )
 
 bundle = load_shap_bundle()
+model = load_model()
+feature_columns_list = load_feature_columns()
+metrics = load_metrics()
+version = load_model_version()
 sample_raw = bundle["sample_raw"].copy()
 sample_features = bundle["sample_features"].copy()
 contrib_values = bundle["values"]
@@ -41,6 +46,15 @@ with st.sidebar:
     product_choice = st.selectbox("Product", ["All"] + sorted(sample_raw["product_type"].unique().tolist()))
     month_choice = st.selectbox("Month", ["All"] + sorted(sample_raw["month_name"].unique().tolist(), key=lambda item: pd.Timestamp(f"2025-{item}-01").month))
     event_choice = st.selectbox("Event", ["All"] + sorted(sample_raw["active_event_display"].unique().tolist()))
+    st.markdown("---")
+    st.markdown("**Model**")
+    st.caption(
+        f"R² {metrics['test']['r2']:.4f} · RMSE AED {metrics['test']['rmse']:.2f}\n\n"
+        f"CV R² {metrics['cv']['r2_mean']:.4f} ± {metrics['cv']['r2_std']:.4f}\n\n"
+        f"±AED {metrics.get('prediction_interval_90_half_width', 0):.2f} (90% PI)"
+    )
+    if version.get("training_date"):
+        st.caption(f"Trained {version['training_date'][:10]}")
 
 mask = pd.Series(True, index=sample_raw.index)
 if zone_choice != "All":
@@ -76,7 +90,7 @@ if len(filtered_raw) < 50:
     )
 
 st.markdown("<br>", unsafe_allow_html=True)
-tab_global, tab_zone, tab_time, tab_event = st.tabs(["Global view", "Zone lens", "Time lens", "Event lens"])
+tab_global, tab_zone, tab_time, tab_event, tab_residuals = st.tabs(["Global view", "Zone lens", "Time lens", "Event lens", "Residuals"])
 
 with tab_global:
     left, right = st.columns(2, gap="large")
@@ -201,3 +215,138 @@ with tab_event:
     )
     section_header("Event statistics table")
     st.dataframe(event_stats, use_container_width=True, hide_index=True)
+
+    # SHAP contribution breakdown by event — which drivers change most across events?
+    section_header("Feature contributions by event context")
+    top_5_features = top_driver_frame["feature"].head(5).tolist()
+    _feat_cols = list(filtered_features.columns)
+    event_contrib_rows = []
+    for evt in top_events:
+        evt_mask = filtered_raw["active_event_display"].values == evt
+        evt_vals = filtered_values[evt_mask]
+        if len(evt_vals) == 0:
+            continue
+        for feat in top_5_features:
+            if feat not in _feat_cols:
+                continue
+            fidx = _feat_cols.index(feat)
+            event_contrib_rows.append({
+                "event": evt,
+                "feature": feat,
+                "mean_contribution_aed": round(float(evt_vals[:, fidx].mean()), 3),
+            })
+    if event_contrib_rows:
+        event_contrib_frame = pd.DataFrame(event_contrib_rows)
+        event_contrib_chart = px.bar(
+            event_contrib_frame,
+            x="event",
+            y="mean_contribution_aed",
+            color="feature",
+            barmode="group",
+            title="Mean SHAP contribution by event context — top 5 global drivers",
+            template="plotly_white",
+        )
+        event_contrib_chart.update_layout(
+            height=440,
+            margin={"l": 0, "r": 0, "t": 44, "b": 80},
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
+            xaxis={"gridcolor": "#f1f5f9", "tickangle": -20},
+            yaxis={"title": "Mean contribution (AED)", "gridcolor": "#f1f5f9"},
+            legend={"title": "Feature", "font": {"size": 11}},
+        )
+        st.plotly_chart(event_contrib_chart, use_container_width=True)
+        st.caption(
+            "Each group of bars shows the mean tree contribution of the top 5 global features for rides occurring "
+            "during that event. Differences across events reveal which features are event-sensitive vs stable."
+        )
+
+with tab_residuals:
+    # Compute model predictions on the filtered SHAP sample to derive residuals
+    _filtered_pred = model.predict(filtered_features)
+    _filtered_actual = filtered_raw["final_price_aed"].values
+    _residuals = _filtered_actual - _filtered_pred
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    res_cols = st.columns(4, gap="small")
+    res_cols[0].metric("Mean residual", f"AED {_residuals.mean():.2f}")
+    res_cols[1].metric("RMSE (filtered)", f"AED {np.sqrt((_residuals ** 2).mean()):.2f}")
+    res_cols[2].metric("MAE (filtered)", f"AED {np.abs(_residuals).mean():.2f}")
+    res_cols[3].metric("Max |error|", f"AED {np.abs(_residuals).max():.2f}")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    _chart_layout = dict(
+        margin={"l": 0, "r": 0, "t": 44, "b": 0},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
+    )
+
+    section_header("Residual distribution")
+    res_hist = px.histogram(
+        x=_residuals,
+        nbins=60,
+        title="Distribution of (actual \u2212 predicted) residuals — AED",
+        template="plotly_white",
+        color_discrete_sequence=["#0d9488"],
+    )
+    res_hist.add_vline(x=0, line_dash="dash", line_color="#dc2626", line_width=1.5)
+    res_hist.update_layout(height=300, xaxis_title="Residual (AED)", yaxis_title="Count", **_chart_layout)
+    st.plotly_chart(res_hist, use_container_width=True)
+    st.caption("Residuals centred near zero with thin tails indicate the model is well-calibrated. Skew or heavy tails would flag systematic bias.")
+
+    res_left, res_right = st.columns(2, gap="large")
+
+    with res_left:
+        section_header("Residuals by pickup zone")
+        _res_zone_frame = pd.DataFrame({"zone": filtered_raw["pickup_zone"].values, "residual": _residuals})
+        zone_order = _res_zone_frame.groupby("zone")["residual"].median().sort_values().index.tolist()
+        res_zone_box = px.box(
+            _res_zone_frame,
+            x="zone",
+            y="residual",
+            category_orders={"zone": zone_order},
+            title="Residual spread by pickup zone",
+            template="plotly_white",
+            color_discrete_sequence=["#0d9488"],
+        )
+        res_zone_box.add_hline(y=0, line_dash="dash", line_color="#dc2626", line_width=1.5)
+        res_zone_box.update_layout(
+            height=420,
+            xaxis={"tickangle": -35, "gridcolor": "#f1f5f9"},
+            yaxis={"title": "Residual (AED)", "gridcolor": "#f1f5f9"},
+            **_chart_layout,
+        )
+        st.plotly_chart(res_zone_box, use_container_width=True)
+
+    with res_right:
+        section_header("Mean residual by hour")
+        _res_hour_frame = pd.DataFrame({"hour": filtered_raw["hour"].values, "residual": _residuals})
+        hourly_bias = _res_hour_frame.groupby("hour")["residual"].mean().reset_index()
+        hourly_bias["color"] = hourly_bias["residual"].apply(lambda v: "#dc2626" if v > 0 else "#0d9488")
+        res_hour_bar = px.bar(
+            hourly_bias,
+            x="hour",
+            y="residual",
+            title="Mean residual by hour of day (positive = over-prediction)",
+            template="plotly_white",
+            color="residual",
+            color_continuous_scale="RdBu_r",
+            color_continuous_midpoint=0,
+        )
+        res_hour_bar.add_hline(y=0, line_dash="dash", line_color="#475569", line_width=1)
+        res_hour_bar.update_layout(
+            height=420,
+            xaxis={"title": "Hour", "gridcolor": "#f1f5f9", "dtick": 2},
+            yaxis={"title": "Mean residual (AED)", "gridcolor": "#f1f5f9"},
+            coloraxis_showscale=False,
+            **_chart_layout,
+        )
+        st.plotly_chart(res_hour_bar, use_container_width=True)
+
+    st.caption(
+        "Residuals are computed on the 5,000-ride SHAP sample using the trained XGBoost model. "
+        "These are in-sample residuals for the SHAP pool — the full held-out test set RMSE is AED "
+        f"{metrics['test']['rmse']:.2f}."
+    )

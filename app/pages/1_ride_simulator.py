@@ -17,7 +17,7 @@ for path in (APP_DIR, PROJECT_ROOT):
 
 from utils.domain import DEFAULT_DROPOFF_POINT, DEFAULT_PICKUP_POINT, PAYMENT_METHODS, PRODUCT_NAMES, build_inference_frame, build_trip_record
 from utils.geo_utils import build_picker_map, get_nearest_zone
-from utils.model_loader import load_feature_columns, load_metrics, load_model
+from utils.model_loader import load_feature_columns, load_metrics, load_model, load_model_version
 from utils.nlp_explainer import build_explanation
 from utils.routing_api import get_route_context
 from utils.shap_engine import compute_local_contributions, plot_waterfall
@@ -42,6 +42,7 @@ model = load_model()
 feature_columns = load_feature_columns()
 metrics = load_metrics()
 _pi90_half_width = metrics.get("prediction_interval_90_half_width", 0.0)
+version_sim = load_model_version()
 
 if "pickup_point" not in st.session_state:
     st.session_state["pickup_point"] = DEFAULT_PICKUP_POINT
@@ -73,6 +74,16 @@ with st.sidebar:
     pickup_lon = st.number_input("Pickup longitude", value=float(st.session_state["pickup_point"][1]), format="%.6f", step=0.000001)
     dropoff_lat = st.number_input("Dropoff latitude", value=float(st.session_state["dropoff_point"][0]), format="%.6f", step=0.000001)
     dropoff_lon = st.number_input("Dropoff longitude", value=float(st.session_state["dropoff_point"][1]), format="%.6f", step=0.000001)
+
+    st.markdown("---")
+    st.markdown("**Model**")
+    st.caption(
+        f"R\u00b2 {metrics['test']['r2']:.4f} \u00b7 RMSE AED {metrics['test']['rmse']:.2f}\n\n"
+        f"CV R\u00b2 {metrics['cv']['r2_mean']:.4f} \u00b1 {metrics['cv']['r2_std']:.4f}\n\n"
+        f"\u00b1AED {_pi90_half_width:.2f} (90% PI)"
+    )
+    if version_sim.get("training_date"):
+        st.caption(f"Trained {version_sim['training_date'][:10]}")
 
 st.session_state["pickup_point"] = (pickup_lat, pickup_lon)
 st.session_state["dropoff_point"] = (dropoff_lat, dropoff_lon)
