@@ -1,27 +1,29 @@
 {
   "train": {
-    "rmse": 4.3791,
-    "mae": 2.7298,
+    "rmse": 4.3633,
+    "mae": 2.7197,
     "r2": 0.9928,
-    "mape": 2.9766
+    "mape": 2.9982
   },
   "test": {
-    "rmse": 5.5024,
-    "mae": 3.1896,
-    "r2": 0.9883,
-    "mape": 3.3128
+    "rmse": 5.4492,
+    "mae": 3.1668,
+    "r2": 0.9885,
+    "mape": 3.3294
   },
   "cv": {
     "r2_scores": [
       0.9881,
-      0.9883,
-      0.9877
+      0.9885,
+      0.988
     ],
-    "r2_mean": 0.988,
+    "r2_mean": 0.9882,
     "r2_std": 0.0002
   },
   "n_features": 76,
   "n_train": 119970,
   "n_test": 29993,
-  "best_iteration": 424
+  "best_iteration": 415,
+  "prediction_interval_90_half_width": 7.12,
+  "prediction_interval_90_coverage": 0.9
 }

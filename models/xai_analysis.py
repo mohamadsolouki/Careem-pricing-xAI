@@ -30,7 +30,7 @@ SHAP_SUMMARY_PATH = os.path.join(SAVE_DIR, "shap_summary.json")
 
 os.makedirs(FIG_DIR, exist_ok=True)
 
-SAMPLE_SIZE = 2000
+SAMPLE_SIZE = 5000
 TOP_FEATURES = 20
 
 
@@ -190,7 +190,8 @@ plot_bar(contrib_values, feature_columns, os.path.join(FIG_DIR, "shap_bar.png"))
 for feature_name, file_name in [
     ("route_distance_km", "shap_dependence_distance.png"),
     ("demand_index", "shap_dependence_demand.png"),
-    ("captain_availability_score", "shap_dependence_supply.png"),
+    ("traffic_index", "shap_dependence_traffic.png"),
+    ("distance_x_traffic", "shap_dependence_dist_traffic.png"),
 ]:
     if feature_name in X_sample.columns:
         plot_dependence(contrib_values, X_sample, feature_name, os.path.join(FIG_DIR, file_name))

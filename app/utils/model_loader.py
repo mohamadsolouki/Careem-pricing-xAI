@@ -61,7 +61,7 @@ def load_dataset_profile():
         "pickup_zone",
         "product_type",
         "demand_index",
-        "supply_pressure_index",
+        "traffic_index",
     ]
     dataset = pd.read_csv(DATA_PATH, usecols=usecols)
     completed = dataset[dataset["booking_status"] == "Completed"]
@@ -71,7 +71,17 @@ def load_dataset_profile():
         "avg_price": float(completed["final_price_aed"].mean()),
         "airport_share": float(dataset["is_airport_ride"].mean()),
         "avg_demand_index": float(dataset["demand_index"].mean()),
-        "avg_supply_pressure": float(dataset["supply_pressure_index"].mean()),
+        "avg_traffic_index": float(dataset["traffic_index"].mean()),
         "top_pickup_zones": completed.groupby("pickup_zone")["final_price_aed"].mean().sort_values(ascending=False).head(5),
         "top_products": completed.groupby("product_type")["final_price_aed"].mean().sort_values(ascending=False).head(5),
     }
+
+
+@st.cache_data(show_spinner=False)
+def load_model_version() -> dict:
+    """Load model versioning metadata written by train_model.py."""
+    version_path = MODELS_DIR / "model_version.json"
+    if not version_path.exists():
+        return {}
+    with open(version_path, "r", encoding="utf-8") as f:
+        return json.load(f)

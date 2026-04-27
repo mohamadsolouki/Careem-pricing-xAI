@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 
@@ -18,7 +19,7 @@ for path in (APP_DIR, PROJECT_ROOT):
         sys.path.insert(0, str(path))
 
 from utils.domain import DEFAULT_DROPOFF_POINT, DEFAULT_PICKUP_POINT, PAYMENT_METHODS, PRODUCT_NAMES, build_inference_frame, build_trip_record
-from utils.model_loader import load_feature_columns, load_model, load_shap_bundle
+from utils.model_loader import load_feature_columns, load_metrics, load_model, load_shap_bundle
 from utils.nlp_explainer import build_explanation
 from utils.routing_api import get_route_context
 from utils.shap_engine import compute_local_contributions, plot_dependence, plot_waterfall
@@ -38,6 +39,8 @@ hero(
 model = load_model()
 feature_columns = load_feature_columns()
 bundle = load_shap_bundle()
+metrics = load_metrics()
+_pi90_half_width = metrics.get("prediction_interval_90_half_width", 0.0)
 sample_features = bundle["sample_features"].copy()
 contrib_values = bundle["values"]
 
@@ -56,30 +59,55 @@ with left:
     st.pyplot(plot_dependence(contrib_values, sample_features, selected_feature), use_container_width=True)
 
 with right:
-    section_header("Partial dependence (marginal response)")
+    section_header("Partial dependence + ICE curves")
     baseline_row = sample_features.mean().to_frame().T.reset_index(drop=True)
     low = float(sample_features[selected_feature].quantile(0.05))
     high = float(sample_features[selected_feature].quantile(0.95))
     sweep_values = np.linspace(low, high, 30)
+
+    # Mean PDP: sweep the selected feature against the mean baseline row
     predictions = []
     for value in sweep_values:
         scenario = baseline_row.copy()
         scenario[selected_feature] = value
         predictions.append(float(model.predict(scenario)[0]))
-    sweep_frame = pd.DataFrame({"feature_value": sweep_values, "predicted_price_aed": predictions})
-    sweep_chart = px.line(
-        sweep_frame,
-        x="feature_value",
-        y="predicted_price_aed",
-        markers=True,
-        title=f"Predicted fare response to {selected_feature}",
-        template="plotly_white",
+
+    # ICE: 15 random rides from the SHAP sample — shows spread of individual responses
+    _N_ICE = 15
+    _ice_idx = np.random.RandomState(42).choice(
+        len(sample_features), min(_N_ICE, len(sample_features)), replace=False
     )
-    sweep_chart.update_traces(
-        line={"color": "#0d9488", "width": 2.5},
-        marker={"color": "#0d9488", "size": 6},
-    )
-    sweep_chart.update_layout(
+    _ice_sample = sample_features.iloc[_ice_idx].reset_index(drop=True)
+    _ice_traces = []
+    for _i in range(len(_ice_sample)):
+        _ice_row = _ice_sample.iloc[[_i]].copy()
+        _ice_preds = []
+        for _v in sweep_values:
+            _r = _ice_row.copy()
+            _r[selected_feature] = _v
+            _ice_preds.append(float(model.predict(_r)[0]))
+        _ice_traces.append(_ice_preds)
+
+    sweep_fig = go.Figure()
+    # ICE traces (thin, translucent gray)
+    for _trace in _ice_traces:
+        sweep_fig.add_trace(go.Scatter(
+            x=sweep_values, y=_trace,
+            mode="lines",
+            line=dict(color="rgba(100,116,139,0.22)", width=1),
+            showlegend=False,
+            hoverinfo="skip",
+        ))
+    # Mean PDP (thick teal)
+    sweep_fig.add_trace(go.Scatter(
+        x=sweep_values, y=predictions,
+        mode="lines+markers",
+        name="Mean (PDP)",
+        line=dict(color="#0d9488", width=2.5),
+        marker=dict(color="#0d9488", size=6),
+    ))
+    sweep_fig.update_layout(
+        title=f"PDP + ICE: {selected_feature}",
         height=360,
         margin={"l": 0, "r": 0, "t": 44, "b": 0},
         paper_bgcolor="rgba(0,0,0,0)",
@@ -88,8 +116,10 @@ with right:
         title_font={"size": 14, "color": "#0f172a"},
         xaxis={"gridcolor": "#f1f5f9", "title": {"text": selected_feature, "font": {"color": "#64748b"}}},
         yaxis={"gridcolor": "#f1f5f9", "title": {"text": "Predicted fare (AED)", "font": {"color": "#64748b"}}},
+        legend={"font": {"size": 11, "color": "#64748b"}},
     )
-    st.plotly_chart(sweep_chart, use_container_width=True)
+    st.plotly_chart(sweep_fig, use_container_width=True)
+    st.caption("Gray lines are Individual Conditional Expectation (ICE) curves for 15 random rides. Teal line is the population mean (PDP).")
 
 st.divider()
 section_header("What-if lab")
@@ -154,8 +184,6 @@ distance_override = override_columns[0].slider("Distance override (km)", min_val
 traffic_override = override_columns[1].slider("Traffic index override", min_value=0.65, max_value=2.20, value=round(float(scenario_record["traffic_index"]), 2), step=0.01)
 demand_override_col3 = override_columns[2].slider("Demand index override", min_value=0.75, max_value=3.0, value=round(float(scenario_record["demand_index"]), 2), step=0.01)
 
-demand_override = st.slider("Global demand override", min_value=0.75, max_value=3.0, value=round(float(scenario_record["demand_index"]), 2), step=0.01, key="whatif_demand_global", label_visibility="collapsed")
-
 scenario_record["route_distance_km"] = round(distance_override, 2)
 scenario_record["traffic_index"] = round(traffic_override, 3)
 scenario_record["route_efficiency_ratio"] = round(distance_override / max(float(scenario_record["route_direct_distance_km"]), 0.5), 3)
@@ -173,7 +201,9 @@ explanation = build_explanation(scenario_record, contribution_series, predicted_
 st.markdown("<br>", unsafe_allow_html=True)
 lab_left, lab_right = st.columns([1.0, 1.0], gap="large")
 with lab_left:
-    whatif_result(predicted_price, float(scenario_record["final_price_aed"]))
+    _wi_low  = max(0.0, predicted_price - _pi90_half_width)
+    _wi_high = predicted_price + _pi90_half_width
+    whatif_result(predicted_price, float(scenario_record["final_price_aed"]), low_aed=_wi_low, high_aed=_wi_high)
     metric_row = st.columns(3)
     metric_row[0].metric("Route source", scenario_record.get("route_source", "Synthetic"))
     metric_row[1].metric("Traffic source", scenario_record.get("traffic_source", "Synthetic"))

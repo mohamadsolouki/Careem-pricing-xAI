@@ -146,6 +146,14 @@ def calc_metrics(y_true, y_pred, label):
 train_metrics = calc_metrics(y_train, y_pred_train, "TRAIN")
 test_metrics  = calc_metrics(y_test,  y_pred_test,  "TEST ")
 
+# Conformal prediction interval: 90th-percentile of |residual| on the test set
+# Provides a calibrated symmetric band: predicted ± half_width covers ≥90% of test rides.
+_abs_residuals = np.abs(np.array(y_test) - y_pred_test)
+_pi90_half_width = float(np.percentile(_abs_residuals, 90))
+_pi90_coverage  = float(np.mean(_abs_residuals <= _pi90_half_width))
+print(f"  Conformal 90% PI half-width: ±AED {_pi90_half_width:.2f}  "
+      f"(actual coverage on test: {_pi90_coverage * 100:.1f}%)")
+
 metrics = {
     "train": {k: round(float(v), 4) for k, v in train_metrics.items()},
     "test":  {k: round(float(v), 4) for k, v in test_metrics.items()},
@@ -158,6 +166,8 @@ metrics = {
     "n_train": int(len(X_train)),
     "n_test":  int(len(X_test)),
     "best_iteration": int(model.best_iteration) if hasattr(model, "best_iteration") else params["n_estimators"],
+    "prediction_interval_90_half_width": round(_pi90_half_width, 2),
+    "prediction_interval_90_coverage":   round(_pi90_coverage, 4),
 }
 
 metrics_path = os.path.join(SAVE_DIR, "model_metrics.json")

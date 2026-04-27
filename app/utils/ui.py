@@ -447,6 +447,17 @@ hr {
     margin-top: 0.4rem;
     font-weight: 500;
 }
+.xprice-fare-box .fare-interval {
+    font-size: 0.8rem;
+    color: #0f766e;
+    font-weight: 700;
+    background: rgba(13,148,136,0.09);
+    border-radius: 8px;
+    padding: 0.18rem 0.8rem;
+    display: inline-block;
+    margin-top: 0.4rem;
+    letter-spacing: 0.01em;
+}
 
 /* ── Stat strip ─────────────────────────────── */
 .xprice-stat-strip {
@@ -557,6 +568,16 @@ hr {
     color: #64748b;
     margin-top: 0.25rem;
 }
+.xprice-whatif-banner .wi-interval {
+    font-size: 0.8rem;
+    color: #0f766e;
+    font-weight: 700;
+    background: rgba(13,148,136,0.09);
+    border-radius: 8px;
+    padding: 0.18rem 0.8rem;
+    display: inline-block;
+    margin-top: 0.25rem;
+}
 </style>
 """
 
@@ -596,26 +617,34 @@ def section_header(title: str) -> None:
     )
 
 
-def fare_result(label: str, value_aed: float, sub: str = "") -> None:
+def fare_result(label: str, value_aed: float, sub: str = "", low_aed: float | None = None, high_aed: float | None = None) -> None:
+    interval_html = ""
+    if low_aed is not None and high_aed is not None:
+        interval_html = f'<div class="fare-interval">90% range: AED {low_aed:,.2f}&nbsp;–&nbsp;AED {high_aed:,.2f}</div>'
     sub_html = f'<div class="fare-sub">{sub}</div>' if sub else ""
     st.markdown(
         f"""<div class="xprice-fare-box">
             <div class="fare-label">{label}</div>
             <div class="fare-value">AED {value_aed:,.2f}</div>
+            {interval_html}
             {sub_html}
         </div>""",
         unsafe_allow_html=True,
     )
 
 
-def whatif_result(predicted: float, reference: float) -> None:
+def whatif_result(predicted: float, reference: float, low_aed: float | None = None, high_aed: float | None = None) -> None:
     delta = predicted - reference
     sign = "+" if delta >= 0 else ""
     delta_color = "#059669" if delta <= 0 else "#dc2626"
+    interval_html = ""
+    if low_aed is not None and high_aed is not None:
+        interval_html = f'<div class="wi-interval">90% range: AED {low_aed:,.2f}&nbsp;–&nbsp;AED {high_aed:,.2f}</div>'
     st.markdown(
         f"""<div class="xprice-whatif-banner">
             <div class="wi-label">What-if predicted fare</div>
             <div class="wi-value">AED {predicted:,.2f}</div>
+            {interval_html}
             <div class="wi-ref" style="color:{delta_color};font-weight:700;">
                 {sign}AED {delta:,.2f} vs engine reference (AED {reference:,.2f})
             </div>

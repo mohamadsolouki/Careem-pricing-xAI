@@ -17,7 +17,7 @@ for path in (APP_DIR, PROJECT_ROOT):
 
 from utils.domain import DEFAULT_DROPOFF_POINT, DEFAULT_PICKUP_POINT, PAYMENT_METHODS, PRODUCT_NAMES, build_inference_frame, build_trip_record
 from utils.geo_utils import build_picker_map, get_nearest_zone
-from utils.model_loader import load_feature_columns, load_model
+from utils.model_loader import load_feature_columns, load_metrics, load_model
 from utils.nlp_explainer import build_explanation
 from utils.routing_api import get_route_context
 from utils.shap_engine import compute_local_contributions, plot_waterfall
@@ -40,6 +40,8 @@ hero(
 
 model = load_model()
 feature_columns = load_feature_columns()
+metrics = load_metrics()
+_pi90_half_width = metrics.get("prediction_interval_90_half_width", 0.0)
 
 if "pickup_point" not in st.session_state:
     st.session_state["pickup_point"] = DEFAULT_PICKUP_POINT
@@ -158,10 +160,14 @@ with top_left:
 with top_right:
     section_header("Fare quote")
     anchor_delta = predicted_price - float(record["final_price_aed"])
+    _pi_low  = max(0.0, predicted_price - _pi90_half_width)
+    _pi_high = predicted_price + _pi90_half_width
     fare_result(
         f"{product_type} · {record['pickup_zone']} → {record['dropoff_zone']}",
         predicted_price,
         sub=f"Engine anchor AED {record['final_price_aed']:,.2f} · Model vs engine: {'+'if anchor_delta>=0 else ''}{anchor_delta:.2f} AED",
+        low_aed=_pi_low,
+        high_aed=_pi_high,
     )
 
     card(

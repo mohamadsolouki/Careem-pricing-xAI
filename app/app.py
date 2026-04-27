@@ -14,7 +14,7 @@ for path in (APP_DIR, PROJECT_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from utils.model_loader import load_dataset_profile, load_metrics, load_shap_bundle
+from utils.model_loader import load_dataset_profile, load_metrics, load_model_version, load_shap_bundle
 from utils.ui import apply_theme, card, hero, section_header, sidebar_brand
 
 
@@ -24,6 +24,7 @@ apply_theme()
 metrics = load_metrics()
 profile = load_dataset_profile()
 shap_bundle = load_shap_bundle()
+version = load_model_version()
 shap_summary = pd.DataFrame(shap_bundle["summary"])
 
 hero(
@@ -41,14 +42,24 @@ with st.sidebar:
     st.markdown(f"- **Completed rate:** {profile['completed_rate'] * 100:.1f}%")
     st.markdown(f"- **Model features:** {metrics['n_features']}")
     st.markdown(f"- **Test RMSE:** AED {metrics['test']['rmse']:.2f}")
+    _cv = metrics.get("cv", {})
+    if _cv.get("r2_mean") is not None:
+        st.markdown(f"- **CV R² (5-fold):** {_cv['r2_mean']:.4f} ± {_cv['r2_std']:.4f}")
+    _pi_hw = metrics.get("prediction_interval_90_half_width")
+    if _pi_hw:
+        st.markdown(f"- **90% PI half-width:** ±AED {_pi_hw:.2f}")
+    if version.get("training_date"):
+        st.caption(f"Model trained {version['training_date'][:10]}")
 
 st.markdown("<br>", unsafe_allow_html=True)
-metric_columns = st.columns(5, gap="small")
+metric_columns = st.columns(6, gap="small")
 metric_columns[0].metric("Dataset", f"{profile['rows']:,} rides")
 metric_columns[1].metric("Completed rides", f"{profile['completed_rate'] * 100:.1f}%")
 metric_columns[2].metric("Average fare", f"AED {profile['avg_price']:.2f}")
 metric_columns[3].metric("Test R²", f"{metrics['test']['r2']:.4f}")
-metric_columns[4].metric("Airport share", f"{profile['airport_share'] * 100:.1f}%")
+_cv_mean = metrics.get("cv", {}).get("r2_mean")
+metric_columns[4].metric("CV R² (5-fold)", f"{_cv_mean:.4f}" if _cv_mean else "N/A")
+metric_columns[5].metric("Airport share", f"{profile['airport_share'] * 100:.1f}%")
 
 st.markdown("<br>", unsafe_allow_html=True)
 left, right = st.columns([1.05, 0.95], gap="large")
