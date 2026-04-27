@@ -18,7 +18,7 @@ A unified approach to interpreting model predictions.
 *Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining*, 1135–1144.  
 → Original LIME paper. Used for methodological comparison in Section 4. Cite alongside SHAP.
 
-**[R3] Salih, A., et al. (2025).**  
+**[R3] Salih, A. M., Raisi-Estabragh, Z., Boscolo Galazzo, I., Radeva, P., Petersen, S. E., Lekadir, K., & Menegaz, G. (2024).**  
 A perspective on explainable artificial intelligence methods: SHAP and LIME.  
 *Advanced Intelligent Systems*, Wiley.  
 https://advanced.onlinelibrary.wiley.com/doi/10.1002/aisy.202400304  
@@ -33,19 +33,19 @@ Explainable Artificial Intelligence (XAI): Concepts, taxonomies, opportunities a
 
 ## XAI IN DECISION SUPPORT SYSTEMS & MANAGEMENT
 
-**[R5] [Author(s)]. (2025).**  
+**[R5] [Author(s) — unable to verify; confirm before submission]. (2025).**  
 Integrating Explainable AI (XAI) into Decision Support Systems: A framework for enhancing transparency and trust in managerial decision-making.  
 ResearchGate.  
 https://www.researchgate.net/publication/395809383_Integrating_Explainable_Ai_Xai_Into_Decision_Support_Systems_A_Framework_for_Enhancing_Transparency_and_Trust_in_Managerial_Decision-Making  
 → Directly addresses XAI in managerial DSS context. Cite in Sections 2 and 4.
 
-**[R6] [Author(s)]. (2024).**  
+**[R6] Kostopoulos, G., Davrazos, G., & Kotsiantis, S. (2024).**  
 Explainable Artificial Intelligence-Based Decision Support Systems: A recent review.  
 *Electronics, 13*(14), 2842. MDPI.  
 https://www.mdpi.com/2079-9292/13/14/2842  
 → Peer-reviewed review of XAI-DSS integration. Cite in Section 2.
 
-**[R7] [Author(s)]. (2025).**  
+**[R7] Chinnaraju, A. (2025).**  
 Explainable AI (XAI) for trustworthy and transparent decision-making: A theoretical framework for AI interpretability.  
 *World Journal of Advanced Engineering Technology and Sciences (WJAETS).*  
 https://journalwjaets.com/sites/default/files/fulltext_pdf/WJAETS-2025-0106.pdf  
@@ -55,15 +55,15 @@ https://journalwjaets.com/sites/default/files/fulltext_pdf/WJAETS-2025-0106.pdf
 
 ## ALGORITHMIC PRICING TRANSPARENCY & CONSUMER TRUST
 
-**[R8] [Author(s)]. (2026).**  
+**[R8] de Lucas López, A. P., Gorneanu, A. E., Yela Aránega, A., & Gallego Martín, L. (2026).**  
 Ethics, transparency, and consumer trust in AI-enabled pricing: Implications for sustainable technology entrepreneurship and economic policy.  
-*ScienceDirect.*  
+*Sustainable Technology and Entrepreneurship, 5*(2), 100131. Elsevier.  
 https://www.sciencedirect.com/article/pii/S2773032826000040  
 → Most recent paper directly linking AI pricing transparency to consumer trust. Cite in Sections 2 and 5 (Business Impact).
 
-**[R9] [Author(s)]. (2024).**  
+**[R9] Vomberg, A., Homburg, C., & Sarantopoulos, P. (2024).**  
 Algorithmic pricing: Effects on consumer trust and price search.  
-*ScienceDirect.*  
+*International Journal of Research in Marketing, 42*(4, Part B), 1166–1186. Elsevier.  
 https://www.sciencedirect.com/article/pii/S0167811624000946  
 → Empirical research on how algorithmic pricing affects consumer trust. Cite in Section 2.
 
@@ -77,15 +77,15 @@ https://anderson-review.ucla.edu/wp-content/uploads/2024/08/Algo-Pricing-zeitham
 
 ## RIDE-HAILING DYNAMIC PRICING & ML
 
-**[R11] [Author(s)]. (2024).**  
+**[R11] [Author(s) — unable to verify; confirm before submission]. (2024).**  
 Dynamic ride pricing model using machine learning.  
 *International Journal of Scientific Research in Engineering and Technology (IJSRET), 10*(6).  
 https://ijsret.com/wp-content/uploads/2024/11/IJSRET_V10_issue6_542.pdf  
 → Direct application of ML to ride-hailing dynamic pricing. Cite in Section 2.
 
-**[R12] [Author(s)]. (2025).**  
+**[R12] Liang, J., Ke, J., Feng, S., & Yang, H. (2025).**  
 Machine learning for on-demand ride services: A survey.  
-*ScienceDirect.*  
+*Artificial Intelligence for Transportation, 2*, 100008. Elsevier.  
 https://www.sciencedirect.com/article/abs/pii/S3050860625000080  
 → Comprehensive survey of ML in ride-hailing. Cite in Section 2.
 
@@ -95,7 +95,7 @@ Matching and pricing in ride hailing: Wild goose chases and how to solve them.
 https://pubsonline.informs.org/doi/10.1287/mnsc.2022.00096  
 → High-quality journal (INFORMS) paper on ride-hailing pricing mechanics. Cite in Section 2.
 
-**[R14] Sun, et al. (2020).**  
+**[R14] Sun, Z., Xu, Q., & Shi, B. (2020).**  
 Dynamic pricing of ride-hailing platforms considering service quality and supply capacity under demand fluctuation.  
 *Mathematical Problems in Engineering*, Wiley.  
 https://onlinelibrary.wiley.com/doi/10.1155/2020/5620834  
@@ -105,15 +105,15 @@ https://onlinelibrary.wiley.com/doi/10.1155/2020/5620834
 
 ## REGULATORY & COMPLIANCE CONTEXT
 
-**[R15] [Author(s)]. (2025).**  
+**[R15] Goncalves, A., & Correia, A. (2025).**  
 Engineering Explainable AI Systems for GDPR-aligned decision transparency: A modular framework for continuous compliance.  
-*MDPI Laws, 6*(1), 7.  
+*Journal of Cybersecurity and Privacy, 6*(1), 7. MDPI.  
 https://www.mdpi.com/2624-800X/6/1/7  
 → XAI + GDPR compliance framework. Cite in Section 2 (regulatory urgency) and Section 5.
 
-**[R16] [Author(s)]. (2025).**  
+**[R16] Goncalves, A., & Correia, A. (2026).**  
 XAI-Compliance-by-Design: A modular framework for GDPR- and AI Act-aligned decision transparency in high-risk AI systems.  
-*MDPI Laws, 6*(2), 43.  
+*Journal of Cybersecurity and Privacy, 6*(2), 43. MDPI.  
 https://www.mdpi.com/2624-800X/6/2/43  
 → EU AI Act + XAI obligations. Cite in Section 2.
 

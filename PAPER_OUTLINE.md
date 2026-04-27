@@ -100,10 +100,10 @@ XPrice has three layers: (1) a feature-rich ML pricing model, (2) a SHAP explana
 To demonstrate the proposed framework, we construct a synthetic mirror dataset of 150,000+ Dubai ride records incorporating: 12 geographic zones, 30+ features including weather (temperature, rain, sandstorm), active events (DSF, GITEX, NYE, Eid), temporal factors (hour, Ramadan, UAE holidays, peak), product type, and supply metrics. Pricing is computed using a parametric formula calibrated to Careem's documented base fares and surge behavior (Careem Engineering, 2023). This researcher-constructed dataset is explicitly disclosed as synthetic — used to validate the methodology, following DSR practice (Peffers et al., 2007) [R17].
 
 **4.2 ML Price Prediction Model**
-We train an XGBoost regressor to predict `final_price_aed`. XGBoost is selected because SHAP's TreeExplainer computes exact Shapley values for tree-based models in polynomial time [R1, R3]. The model achieves R² > 0.92 on the test set. Cyclical encoding of hour and day-of-week, and interaction features (is_rain × is_peak, event × zone), improve both accuracy and SHAP interpretability.
+We train an XGBoost regressor to predict `final_price_aed`. XGBoost is selected because its native `pred_contribs=True` API computes exact tree contribution values (equivalent to Shapley values) in polynomial time [R1, R3]. The model achieves R²=0.9885, RMSE=AED 5.45, and CV R²=0.9882±0.0002 on a held-out block-split test set (n=29,993 rides) — substantially above our R²>0.92 threshold. Cyclical encoding of hour and day-of-week, and interaction features (`distance_x_traffic`, `traffic_x_peak`, `efficiency_x_traffic`), improve both accuracy and SHAP interpretability.
 
 **4.3 SHAP Explanation Layer**
-- *Global explanations (Operations Manager):* SHAP beeswarm plots rank features by their average impact across all rides. Distance, hour, event proximity, and Ramadan period are consistently the top-4 drivers.
+- *Global explanations (Operations Manager):* SHAP beeswarm and bar plots rank features by their mean absolute tree contribution across all rides. The top global drivers are: (1) `distance_x_traffic` — AED 15.15 mean contribution, (2) `route_distance_km` — AED 14.38, (3) `is_hala_product` — AED 14.12, (4) `demand_index` — AED 5.10. Event and weather features are mid-tier drivers, confirming that base trip geometry dominates before surge adjustments.
 - *Local explanations (End-User):* For every individual ride, a SHAP waterfall chart shows the additive contribution of each feature to that specific fare. This is then translated into a plain-language sentence: *"Your fare includes a AED 3.20 surcharge because you're departing near a major event (GITEX) during peak hours."*
 
 **4.4 SHAP vs LIME Comparison**
@@ -116,7 +116,7 @@ LIME is applied as a methodological comparison. SHAP proves more stable across r
 ## SECTION 5 — Implementation and Business Impact (~250 words)
 
 **Technical feasibility:**
-XPrice is built on open-source tools (XGBoost, SHAP, Streamlit, Folium, OpenWeatherMap API) — zero licensing cost. The application runs in real-time: a price + SHAP explanation generates in under 200ms, well within Careem's documented API latency requirements (Careem Engineering, 2020) [R18]. Integration into the existing YODA ML platform would require adding SHAP as a post-processing step to the deployed price prediction service.
+XPrice is built on open-source tools (XGBoost, Streamlit, Folium, OpenWeatherMap API) — zero licensing cost. Shapley values are computed via XGBoost's native `pred_contribs=True` booster API, eliminating the external `shap` library dependency and reducing per-prediction latency. The application runs in real-time: a price + SHAP explanation generates in under 200ms, well within Careem's documented API latency requirements (Careem Engineering, 2020) [R18]. Integration into the existing YODA ML platform would require adding SHAP as a post-processing step to the deployed price prediction service.
 
 **Organizational considerations:**
 Two audiences require different explanation interfaces:
