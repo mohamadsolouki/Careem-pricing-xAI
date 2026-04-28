@@ -9,3 +9,4 @@ folium>=0.17
 streamlit-folium>=0.23
 requests>=2.32
 lime>=0.2.0.1
+shapely>=2.0

@@ -10,6 +10,7 @@ from utils.domain import (
     build_fallback_route_context,
     classify_traffic,
     get_event_context,
+    get_location_context,
     get_zone_for_point,
     haversine_km,
     stable_rng,
@@ -154,11 +155,17 @@ def get_route_context(
             weather_dmult=weather_dmult,
         )
 
+    pickup_location = get_location_context(pickup_lat, pickup_lon)
+    dropoff_location = get_location_context(dropoff_lat, dropoff_lon)
     duration_min = route["duration_min"] * float(traffic["traffic_index"])
 
     return {
-        "pickup_zone":        get_zone_for_point(pickup_lat, pickup_lon),
-        "dropoff_zone":       get_zone_for_point(dropoff_lat, dropoff_lon),
+        "pickup_zone":        pickup_location["zone"],
+        "dropoff_zone":       dropoff_location["zone"],
+        "pickup_neighborhood":  pickup_location["neighborhood"],
+        "dropoff_neighborhood": dropoff_location["neighborhood"],
+        "pickup_location_source":  pickup_location["source"],
+        "dropoff_location_source": dropoff_location["source"],
         "distance_km":        round(route["distance_km"], 2),
         "direct_distance_km": round(direct_dist_km, 2),
         "efficiency_ratio":   round(route["distance_km"] / max(direct_dist_km, 0.5), 3),

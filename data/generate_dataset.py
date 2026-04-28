@@ -30,6 +30,7 @@ sys.path.insert(0, BASE_DIR)
 
 from zone_config import (
     ZONE_META, ZONE_NAMES, SALIK,
+    get_location_context,
     get_zone_for_point, get_salik,
 )
 
@@ -312,35 +313,50 @@ date_strs  = timestamps.strftime("%Y-%m-%d")
 is_holiday = np.array([d in UAE_HOLIDAYS for d in date_strs])
 
 # ── 3. Events (location-aware) ────────────────────────────────────────────────
-print("Computing location-aware event multipliers...")
 active_event = np.full(N_RIDES, "None", dtype=object)
 event_type   = np.full(N_RIDES, "None", dtype=object)
 event_dmult  = np.ones(N_RIDES)
 
 # ── 4. Zones ──────────────────────────────────────────────────────────────────
-print("Sampling zones...")
-pu_idx = np.random.choice(N_ZONES, size=N_RIDES, p=ZONE_PICK_W_APT)
+print("Sampling pricing zones and coordinates...")
+seed_pu_idx = np.random.choice(N_ZONES, size=N_RIDES, p=ZONE_PICK_W_APT)
 COND_DO = np.zeros((N_ZONES, N_ZONES))
 for _p in range(N_ZONES):
     _pr = ZONE_PICK_W.copy(); _pr[_p] = 0.0; _pr /= _pr.sum()
     COND_DO[_p] = _pr
-do_idx = np.zeros(N_RIDES, dtype=int)
+seed_do_idx = np.zeros(N_RIDES, dtype=int)
 for _p in range(N_ZONES):
-    _m = pu_idx == _p
+    _m = seed_pu_idx == _p
     if _m.sum():
-        do_idx[_m] = np.random.choice(N_ZONES, size=_m.sum(), p=COND_DO[_p])
+        seed_do_idx[_m] = np.random.choice(N_ZONES, size=_m.sum(), p=COND_DO[_p])
 
-pickup_zone  = np.array(ZONE_NAMES)[pu_idx]
-dropoff_zone = np.array(ZONE_NAMES)[do_idx]
-is_airport   = (pickup_zone == "DXB Airport") | (dropoff_zone == "DXB Airport")
-is_intrazone = (pu_idx == do_idx)
+# Jitter coordinates within zone (σ=0.005° ≈ 550 m — tight enough to stay inside
+# most zone polygons even for compact zones like DIFC / Business Bay)
+pickup_lat  = Z_LAT[seed_pu_idx] + np.random.normal(0, 0.005, N_RIDES)
+pickup_lon  = Z_LON[seed_pu_idx] + np.random.normal(0, 0.005, N_RIDES)
+dropoff_lat = Z_LAT[seed_do_idx] + np.random.normal(0, 0.005, N_RIDES)
+dropoff_lon = Z_LON[seed_do_idx] + np.random.normal(0, 0.005, N_RIDES)
 
-# Apply event multipliers per pickup zone
+print("Resolving neighborhoods and pricing zones from coordinates...")
+pickup_locations = [get_location_context(float(lat), float(lon)) for lat, lon in zip(pickup_lat, pickup_lon)]
+dropoff_locations = [get_location_context(float(lat), float(lon)) for lat, lon in zip(dropoff_lat, dropoff_lon)]
+
+pickup_zone = np.array([loc["zone"] for loc in pickup_locations], dtype=object)
+dropoff_zone = np.array([loc["zone"] for loc in dropoff_locations], dtype=object)
+pickup_neighborhood = np.array([loc["neighborhood"] for loc in pickup_locations], dtype=object)
+dropoff_neighborhood = np.array([loc["neighborhood"] for loc in dropoff_locations], dtype=object)
+pickup_location_source = np.array([loc["source"] for loc in pickup_locations], dtype=object)
+dropoff_location_source = np.array([loc["source"] for loc in dropoff_locations], dtype=object)
+pu_idx = np.fromiter((ZONE_IDX[z] for z in pickup_zone), dtype=int, count=N_RIDES)
+do_idx = np.fromiter((ZONE_IDX[z] for z in dropoff_zone), dtype=int, count=N_RIDES)
+is_airport = (pickup_zone == "DXB Airport") | (dropoff_zone == "DXB Airport")
+is_intrazone = pickup_zone == dropoff_zone
+
+print("Computing location-aware event multipliers...")
 for ev in EVENTS:
     mask = (timestamps_d >= pd.Timestamp(ev["start"])) & (timestamps_d <= pd.Timestamp(ev["end"]))
     active_event[mask] = ev["name"]
     event_type[mask]   = ev["type"]
-    # Compute per-ride multiplier based on pickup zone distance from venue
     for z_name in ZONE_NAMES:
         z_mask = mask & (pickup_zone == z_name)
         if z_mask.sum():
@@ -348,13 +364,6 @@ for ev in EVENTS:
                 event_dmult[z_mask],
                 event_multiplier_for_zone(ev, z_name),
             )
-
-# Jitter coordinates within zone (σ=0.005° ≈ 550 m — tight enough to stay inside
-# most zone polygons even for compact zones like DIFC / Business Bay)
-pickup_lat  = Z_LAT[pu_idx] + np.random.normal(0, 0.005, N_RIDES)
-pickup_lon  = Z_LON[pu_idx] + np.random.normal(0, 0.005, N_RIDES)
-dropoff_lat = Z_LAT[do_idx] + np.random.normal(0, 0.005, N_RIDES)
-dropoff_lon = Z_LON[do_idx] + np.random.normal(0, 0.005, N_RIDES)
 
 # ── 5. Distances and Salik ────────────────────────────────────────────────────
 print("Computing distances and Salik gates...")
@@ -536,6 +545,10 @@ df = pd.DataFrame({
     "weather_demand_factor":      np.round(weather_dmult, 3),
     "pickup_zone":                pickup_zone,
     "dropoff_zone":               dropoff_zone,
+    "pickup_neighborhood":        pickup_neighborhood,
+    "dropoff_neighborhood":       dropoff_neighborhood,
+    "pickup_location_source":     pickup_location_source,
+    "dropoff_location_source":    dropoff_location_source,
     "pickup_lat":                 np.round(pickup_lat, 6),
     "pickup_lon":                 np.round(pickup_lon, 6),
     "dropoff_lat":                np.round(dropoff_lat, 6),

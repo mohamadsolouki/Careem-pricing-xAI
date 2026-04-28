@@ -9,6 +9,8 @@ Exported symbols used by both dataset generator and the Streamlit app:
     ZONE_NAMES      – ordered list of pricing zone names
     ZONE_META       – dict[zone_name -> {tier, dmult, lat, lon}]
     SALIK           – dict[(zone_a, zone_b) -> int]  gate count
+    get_location_context(lat, lon) -> dict[str, str]
+    get_neighborhood_for_point(lat, lon) -> str
     get_zone_for_point(lat, lon) -> str
     get_salik(pu_zone, do_zone) -> int
 """
@@ -22,9 +24,20 @@ from functools import lru_cache
 
 try:
     from shapely.geometry import Point, shape as shapely_shape
+    from shapely.prepared import prep as shapely_prep
     _SHAPELY = True
 except ImportError:
     _SHAPELY = False
+
+
+def _normalize_neighborhood_name(name: str) -> str:
+    return " ".join((name or "").upper().strip().split())
+
+
+@lru_cache(maxsize=256)
+def _display_neighborhood_name(name: str) -> str:
+    display_name = _normalize_neighborhood_name(name).title()
+    return display_name.replace("Int'L", "Int'l")
 
 # ── 1. Pricing zone metadata ──────────────────────────────────────────────────
 # centroid lat/lon used when OSRM distance is looked up and as fallback snap
@@ -303,7 +316,7 @@ SALIK: dict[tuple[str, str], int] = {
 # ── 4. Load GeoJSON and build Shapely lookup ──────────────────────────────────
 _GEOJSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "dubai_neighborhoods.geojson")
 
-_polygons: list[tuple] = []   # [(shapely_geom, zone_name), ...]
+_polygons: list[tuple] = []   # [(prepared_geom, neighborhood_name, zone_name), ...]
 
 def _load_polygons() -> None:
     global _polygons
@@ -316,30 +329,18 @@ def _load_polygons() -> None:
     with open(_GEOJSON_PATH, encoding="utf-8") as fh:
         gj = json.load(fh)
     for feat in gj["features"]:
-        name = feat["properties"].get("name", "").upper().strip()
+        name = _normalize_neighborhood_name(feat["properties"].get("name", ""))
         zone = NEIGHBORHOOD_TO_ZONE.get(name)
         if zone is None:
             continue
         try:
             geom = shapely_shape(feat["geometry"])
-            _polygons.append((geom, zone))
+            _polygons.append((shapely_prep(geom), name, zone))
         except Exception:
             pass
 
 
-def get_zone_for_point(lat: float, lon: float) -> str:
-    """Return the pricing zone name for a coordinate.
-
-    Uses GeoJSON polygon boundaries when Shapely is available.
-    Falls back to nearest zone centroid (Euclidean) otherwise.
-    """
-    _load_polygons()
-    if _SHAPELY and _polygons:
-        pt = Point(lon, lat)   # Shapely uses (x=lon, y=lat)
-        for geom, zone in _polygons:
-            if geom.contains(pt):
-                return zone
-    # Fallback: nearest centroid
+def _nearest_zone_for_point(lat: float, lon: float) -> str:
     best, best_d = "Downtown", float("inf")
     for zname, zmeta in ZONE_META.items():
         d = (zmeta["lat"] - lat) ** 2 + (zmeta["lon"] - lon) ** 2
@@ -347,6 +348,36 @@ def get_zone_for_point(lat: float, lon: float) -> str:
             best_d = d
             best = zname
     return best
+
+
+def get_location_context(lat: float, lon: float) -> dict[str, str]:
+    """Return neighborhood, pricing zone, and lookup source for a coordinate."""
+    _load_polygons()
+    if _SHAPELY and _polygons:
+        pt = Point(lon, lat)   # Shapely uses (x=lon, y=lat)
+        for geom, neighborhood, zone in _polygons:
+            if geom.contains(pt) or geom.intersects(pt):
+                return {
+                    "neighborhood": _display_neighborhood_name(neighborhood),
+                    "zone": zone,
+                    "source": "polygon",
+                }
+
+    fallback_zone = _nearest_zone_for_point(lat, lon)
+    return {
+        "neighborhood": fallback_zone,
+        "zone": fallback_zone,
+        "source": "centroid",
+    }
+
+
+def get_neighborhood_for_point(lat: float, lon: float) -> str:
+    return get_location_context(lat, lon)["neighborhood"]
+
+
+def get_zone_for_point(lat: float, lon: float) -> str:
+    """Return the pricing zone name for a coordinate."""
+    return get_location_context(lat, lon)["zone"]
 
 
 def get_salik(pickup_zone: str, dropoff_zone: str) -> int:

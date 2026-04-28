@@ -15,8 +15,8 @@ for path in (APP_DIR, PROJECT_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from utils.domain import DEFAULT_DROPOFF_POINT, DEFAULT_PICKUP_POINT, PAYMENT_METHODS, PRODUCT_NAMES, build_inference_frame, build_trip_record
-from utils.geo_utils import build_picker_map, get_nearest_zone
+from utils.domain import DEFAULT_DROPOFF_POINT, DEFAULT_PICKUP_POINT, PAYMENT_METHODS, PRODUCT_NAMES, build_inference_frame, build_trip_record, get_location_context
+from utils.geo_utils import build_picker_map
 from utils.model_loader import load_feature_columns, load_metrics, load_model, load_model_version
 from utils.nlp_explainer import build_explanation
 from utils.routing_api import get_route_context
@@ -34,45 +34,51 @@ def _apply_page_styles() -> None:
         """
         <style>
         div[data-testid="stVerticalBlockBorderWrapper"] {
-            background: rgba(255,255,255,0.96) !important;
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 20px !important;
-            box-shadow: 0 10px 30px rgba(15,23,42,0.05) !important;
+            background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,255,255,0.86)) !important;
+            border: none !important;
+            border-radius: 18px !important;
+            box-shadow: inset 0 0 0 1px rgba(226,232,240,0.55), 0 6px 18px rgba(15,23,42,0.035) !important;
         }
         div[data-testid="stVerticalBlockBorderWrapper"] > div {
-            padding: 0.3rem 0.45rem !important;
+            padding: 0.12rem 0.22rem !important;
         }
         .ride-dash-caption {
-            margin-top: -0.2rem;
-            margin-bottom: 0.9rem;
+            margin-top: -0.18rem;
+            margin-bottom: 0.72rem;
             color: #64748b;
-            font-size: 0.93rem;
-            line-height: 1.65;
+            font-size: 0.88rem;
+            line-height: 1.55;
         }
         .ride-inline-note {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.55rem;
-            margin-bottom: 0.9rem;
+            gap: 0.4rem;
+            margin-bottom: 0.72rem;
         }
         .ride-inline-note span {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: rgba(248,250,252,0.9);
+            border: 1px solid rgba(226,232,240,0.8);
             border-radius: 999px;
-            padding: 0.34rem 0.8rem;
-            font-size: 0.76rem;
+            padding: 0.28rem 0.68rem;
+            font-size: 0.72rem;
             font-weight: 700;
             color: #0f766e;
             letter-spacing: 0.02em;
         }
+        .ride-location-subtle {
+            color: #64748b;
+            font-size: 0.79rem;
+            line-height: 1.45;
+            margin-top: 0.35rem;
+        }
         .ride-bullet-list {
-            margin: 0.45rem 0 0 0;
+            margin: 0.32rem 0 0 0;
             padding-left: 1.1rem;
             color: #475569;
         }
         .ride-bullet-list li {
-            margin-bottom: 0.45rem;
-            line-height: 1.55;
+            margin-bottom: 0.32rem;
+            line-height: 1.48;
         }
         </style>
         """,
@@ -87,13 +93,29 @@ def _sync_coordinate_inputs() -> None:
     st.session_state["dropoff_lon_input"] = float(st.session_state["dropoff_point"][1])
 
 
-def _location_card(title: str, zone: str, point: tuple[float, float]) -> str:
+def _location_primary_label(neighborhood: str, zone: str) -> str:
+    if not neighborhood or neighborhood == zone:
+        return zone
+    return neighborhood
+
+
+def _location_detail_label(neighborhood: str, zone: str) -> str:
+    if not neighborhood or neighborhood == zone:
+        return zone
+    return f"{neighborhood} / {zone} zone"
+
+
+def _location_card(title: str, neighborhood: str, zone: str, point: tuple[float, float]) -> str:
     return f"""
     <div class="xprice-card">
         <h3>{title}</h3>
         <div class="xprice-stat-strip">
             <div class="xprice-stat-item">
-                <div class="stat-label">Zone</div>
+                <div class="stat-label">Neighborhood</div>
+                <div class="stat-value">{_location_primary_label(neighborhood, zone)}</div>
+            </div>
+            <div class="xprice-stat-item">
+                <div class="stat-label">Pricing zone</div>
                 <div class="stat-value">{zone}</div>
             </div>
             <div class="xprice-stat-item">
@@ -110,15 +132,17 @@ def _location_card(title: str, zone: str, point: tuple[float, float]) -> str:
 
 
 def _builder_snapshot(ride_dt: datetime, pickup_point: tuple[float, float], dropoff_point: tuple[float, float], use_live_weather: bool, use_live_traffic: bool) -> str:
+    pickup_location = get_location_context(*pickup_point)
+    dropoff_location = get_location_context(*dropoff_point)
     return f"""
     <div class="xprice-stat-strip">
         <div class="xprice-stat-item">
-            <div class="stat-label">Pickup zone</div>
-            <div class="stat-value">{get_nearest_zone(*pickup_point)}</div>
+            <div class="stat-label">Pickup area</div>
+            <div class="stat-value">{_location_primary_label(pickup_location['neighborhood'], pickup_location['zone'])}</div>
         </div>
         <div class="xprice-stat-item">
-            <div class="stat-label">Dropoff zone</div>
-            <div class="stat-value">{get_nearest_zone(*dropoff_point)}</div>
+            <div class="stat-label">Dropoff area</div>
+            <div class="stat-value">{_location_primary_label(dropoff_location['neighborhood'], dropoff_location['zone'])}</div>
         </div>
         <div class="xprice-stat-item">
             <div class="stat-label">Ride window</div>
@@ -185,10 +209,10 @@ hero(
 with st.container(border=True):
     st.markdown("#### Trip builder")
     st.markdown(
-        '<div class="ride-dash-caption">All primary filters now live on the page so you can adjust the route, ride timing, and quote inputs without bouncing between a sidebar and the map.</div>',
+        '<div class="ride-dash-caption">Route, timing, and quote controls stay on the page so pickup and dropoff edits remain visible while you work.</div>',
         unsafe_allow_html=True,
     )
-    builder_col_1, builder_col_2, builder_col_3, builder_col_4, builder_col_5 = st.columns([1.05, 1.05, 0.95, 0.95, 1.2], gap="medium")
+    builder_col_1, builder_col_2, builder_col_3, builder_col_4, builder_col_5 = st.columns([1.02, 1.02, 0.92, 0.92, 1.12], gap="small")
     with builder_col_1:
         product_type = st.selectbox("Product", PRODUCT_NAMES, index=0)
     with builder_col_2:
@@ -258,13 +282,13 @@ route_context = get_route_context(
 )
 weather = get_weather(pickup_point[0], pickup_point[1], ride_dt, prefer_live=use_live_weather)
 
-top_left, top_right = st.columns([1.28, 0.92], gap="large")
+top_left, top_right = st.columns([1.34, 0.86], gap="medium")
 
 with top_left:
     with st.container(border=True):
         st.markdown("#### Route editor")
         st.markdown(
-            '<div class="ride-dash-caption">Drag the green pickup chip and the red dropoff chip directly on the map. The map still pans normally, but marker drags now update the route instead of forcing you to juggle sidebar modes.</div>',
+            '<div class="ride-dash-caption">Drag the pickup and dropoff chips directly on the map. Panning still works normally, but pin drags now update the route in place.</div>',
             unsafe_allow_html=True,
         )
         st.markdown(
@@ -280,7 +304,7 @@ with top_left:
                 zoom=st.session_state.get("map_zoom"),
             ),
             key="ride_simulator_map",
-            height=560,
+            height=520,
             returned_objects=[],
             use_container_width=True,
         )
@@ -326,14 +350,14 @@ with top_left:
         contribution_series, base_value, predicted_price = compute_local_contributions(model, feature_frame)
         explanation = build_explanation(record, contribution_series, predicted_price, base_value)
 
-        pickup_summary, dropoff_summary = st.columns(2, gap="medium")
+        pickup_summary, dropoff_summary = st.columns(2, gap="small")
         with pickup_summary:
-            st.markdown(_location_card("Pickup pin", record["pickup_zone"], pickup_point), unsafe_allow_html=True)
+            st.markdown(_location_card("Pickup pin", record["pickup_neighborhood"], record["pickup_zone"], pickup_point), unsafe_allow_html=True)
         with dropoff_summary:
-            st.markdown(_location_card("Dropoff pin", record["dropoff_zone"], dropoff_point), unsafe_allow_html=True)
+            st.markdown(_location_card("Dropoff pin", record["dropoff_neighborhood"], record["dropoff_zone"], dropoff_point), unsafe_allow_html=True)
 
         with st.expander("Fine-tune coordinates", expanded=False):
-            coord_left, coord_right = st.columns(2, gap="medium")
+            coord_left, coord_right = st.columns(2, gap="small")
             with coord_left:
                 st.number_input("Pickup latitude", key="pickup_lat_input", format="%.6f", step=0.000001)
                 st.number_input("Pickup longitude", key="pickup_lon_input", format="%.6f", step=0.000001)
@@ -350,7 +374,7 @@ with top_left:
         details[3].metric("Demand index", f"{record['demand_index']:.2f}")
         card(
             "Derived geography",
-            f"<strong>Pickup zone:</strong> {record['pickup_zone']} ({pickup_point[0]:.4f}, {pickup_point[1]:.4f}) &nbsp;→&nbsp; <strong>Dropoff zone:</strong> {record['dropoff_zone']} ({dropoff_point[0]:.4f}, {dropoff_point[1]:.4f}). Route source: {record['route_source']}.",
+            f"<strong>Pickup:</strong> {_location_detail_label(record['pickup_neighborhood'], record['pickup_zone'])} ({pickup_point[0]:.4f}, {pickup_point[1]:.4f}) &nbsp;→&nbsp; <strong>Dropoff:</strong> {_location_detail_label(record['dropoff_neighborhood'], record['dropoff_zone'])} ({dropoff_point[0]:.4f}, {dropoff_point[1]:.4f}). Route source: {record['route_source']}.",
         )
 
 with top_right:
@@ -360,14 +384,14 @@ with top_right:
         _pi_low = max(0.0, predicted_price - _pi90_half_width)
         _pi_high = predicted_price + _pi90_half_width
         fare_result(
-            f"{product_type} · {record['pickup_zone']} → {record['dropoff_zone']}",
+            f"{product_type} / {_location_primary_label(record['pickup_neighborhood'], record['pickup_zone'])} -> {_location_primary_label(record['dropoff_neighborhood'], record['dropoff_zone'])}",
             predicted_price,
-            sub=f"Engine anchor AED {record['final_price_aed']:,.2f} · Model vs engine: {'+' if anchor_delta >= 0 else ''}{anchor_delta:.2f} AED",
+            sub=f"{record['pickup_zone']} zone -> {record['dropoff_zone']} zone | Engine anchor AED {record['final_price_aed']:,.2f} | Model vs engine: {'+' if anchor_delta >= 0 else ''}{anchor_delta:.2f} AED",
             low_aed=_pi_low,
             high_aed=_pi_high,
         )
-        quote_metrics_top = st.columns(2, gap="medium")
-        quote_metrics_bottom = st.columns(2, gap="medium")
+        quote_metrics_top = st.columns(2, gap="small")
+        quote_metrics_bottom = st.columns(2, gap="small")
         quote_metrics_top[0].metric("Weather", record["weather_label"])
         quote_metrics_top[1].metric("Traffic", record["traffic_condition"])
         quote_metrics_bottom[0].metric("Demand", f"{record['demand_index']:.2f}")
@@ -380,7 +404,7 @@ with top_right:
         st.markdown(f"**{explanation['headline']}**")
         st.markdown("<ul class='ride-bullet-list'>" + "".join(f"<li>{sentence}</li>" for sentence in explanation["sentences"]) + "</ul>", unsafe_allow_html=True)
         st.caption(
-            f"Map-derived zones: pickup {get_nearest_zone(*pickup_point)}, dropoff {get_nearest_zone(*dropoff_point)}. Traffic falls back to a synthetic model when no live provider is configured for the selected ride window."
+            f"Map-derived locations: pickup {_location_detail_label(record['pickup_neighborhood'], record['pickup_zone'])} ({record['pickup_location_source']} lookup), dropoff {_location_detail_label(record['dropoff_neighborhood'], record['dropoff_zone'])} ({record['dropoff_location_source']} lookup). Traffic falls back to a synthetic model when no live provider is configured for the selected ride window."
         )
 
     with st.container(border=True):
@@ -393,7 +417,7 @@ with top_right:
         if version_sim.get("training_date"):
             st.caption(f"Trained {version_sim['training_date'][:10]}")
 
-bottom_left, bottom_right = st.columns([1.15, 0.85], gap="large")
+bottom_left, bottom_right = st.columns([1.14, 0.86], gap="medium")
 with bottom_left:
     with st.container(border=True):
         section_header("Local contribution waterfall")

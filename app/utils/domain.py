@@ -22,6 +22,7 @@ from zone_config import (
     ZONE_META,
     ZONE_NAMES,
     SALIK as _SALIK_MAP,
+    get_location_context as zone_location_context,
     get_zone_for_point,
     get_salik,
 )
@@ -173,6 +174,10 @@ def get_nearest_zone(lat: float, lon: float) -> str:
     return get_zone_for_point(lat, lon)
 
 
+def get_location_context(lat: float, lon: float) -> dict[str, str]:
+    return zone_location_context(lat, lon)
+
+
 def classify_traffic(traffic_index: float) -> str:
     if traffic_index >= 1.65:
         return "Severe"
@@ -307,8 +312,10 @@ def build_fallback_route_context(
     ride_dt: datetime | pd.Timestamp,
     weather_dmult: float = 1.0,
 ) -> dict[str, object]:
-    pickup_zone  = get_zone_for_point(pickup_lat, pickup_lon)
-    dropoff_zone = get_zone_for_point(dropoff_lat, dropoff_lon)
+    pickup_location = get_location_context(pickup_lat, pickup_lon)
+    dropoff_location = get_location_context(dropoff_lat, dropoff_lon)
+    pickup_zone  = pickup_location["zone"]
+    dropoff_zone = dropoff_location["zone"]
     time_ctx     = get_time_context(ride_dt)
     ev_ctx       = get_event_context(ride_dt, pickup_zone)
     event_dmult  = float(ev_ctx["event_demand_multiplier"])
@@ -348,6 +355,10 @@ def build_fallback_route_context(
     return {
         "pickup_zone":          pickup_zone,
         "dropoff_zone":         dropoff_zone,
+        "pickup_neighborhood":  pickup_location["neighborhood"],
+        "dropoff_neighborhood": dropoff_location["neighborhood"],
+        "pickup_location_source":  pickup_location["source"],
+        "dropoff_location_source": dropoff_location["source"],
         "distance_km":          round(distance_km, 2),
         "direct_distance_km":   round(direct_dist_km, 2),
         "efficiency_ratio":     round(efficiency_ratio, 3),
@@ -381,8 +392,14 @@ def build_trip_record(
             ride_dt, weather_dmult=weather_dmult,
         )
 
-    pickup_zone  = str(route_context.get("pickup_zone") or get_zone_for_point(pickup_lat, pickup_lon))
-    dropoff_zone = str(route_context.get("dropoff_zone") or get_zone_for_point(dropoff_lat, dropoff_lon))
+    pickup_location = get_location_context(pickup_lat, pickup_lon)
+    dropoff_location = get_location_context(dropoff_lat, dropoff_lon)
+    pickup_zone = str(route_context.get("pickup_zone") or pickup_location["zone"])
+    dropoff_zone = str(route_context.get("dropoff_zone") or dropoff_location["zone"])
+    pickup_neighborhood = str(route_context.get("pickup_neighborhood") or pickup_location["neighborhood"])
+    dropoff_neighborhood = str(route_context.get("dropoff_neighborhood") or dropoff_location["neighborhood"])
+    pickup_location_source = str(route_context.get("pickup_location_source") or pickup_location["source"])
+    dropoff_location_source = str(route_context.get("dropoff_location_source") or dropoff_location["source"])
 
     # Gracefully handle unknown zones
     pickup_meta  = ZONE_META.get(pickup_zone,  ZONE_META["Downtown"])
@@ -507,6 +524,10 @@ def build_trip_record(
         "weather_demand_factor": round(float(weather_dmult), 3),
         "pickup_zone":     pickup_zone,
         "dropoff_zone":    dropoff_zone,
+        "pickup_neighborhood": pickup_neighborhood,
+        "dropoff_neighborhood": dropoff_neighborhood,
+        "pickup_location_source": pickup_location_source,
+        "dropoff_location_source": dropoff_location_source,
         "pickup_lat":      round(float(pickup_lat), 6),
         "pickup_lon":      round(float(pickup_lon), 6),
         "dropoff_lat":     round(float(dropoff_lat), 6),

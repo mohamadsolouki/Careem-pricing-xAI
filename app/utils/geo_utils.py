@@ -3,7 +3,7 @@ from __future__ import annotations
 import folium
 from branca.element import MacroElement, Template
 
-from utils.domain import DUBAI_CENTER, ZONE_NAMES, ZONES, get_nearest_zone as domain_get_nearest_zone
+from utils.domain import DUBAI_CENTER, ZONE_NAMES, ZONES, get_location_context as domain_get_location_context, get_nearest_zone as domain_get_nearest_zone
 
 
 class _DraggableRouteBridge(MacroElement):
@@ -129,6 +129,13 @@ def get_nearest_zone(lat: float, lon: float) -> str:
     return domain_get_nearest_zone(lat, lon)
 
 
+def _map_location_label(lat: float, lon: float) -> str:
+    location = domain_get_location_context(lat, lon)
+    if location["neighborhood"] == location["zone"]:
+        return location["zone"]
+    return f"{location['neighborhood']} / {location['zone']}"
+
+
 def build_picker_map(
     pickup_point: tuple[float, float] | None,
     dropoff_point: tuple[float, float] | None,
@@ -161,7 +168,7 @@ def build_picker_map(
             location=pickup_point,
             draggable=True,
             icon=_build_route_pin("Pickup", "#ecfdf5", "#86efac", "#22c55e"),
-            tooltip=f"Pickup | {get_nearest_zone(*pickup_point)}",
+            tooltip=f"Pickup | {_map_location_label(*pickup_point)}",
             z_index_offset=1000,
         )
         pickup_marker.add_to(map_object)
@@ -172,7 +179,7 @@ def build_picker_map(
             location=dropoff_point,
             draggable=True,
             icon=_build_route_pin("Dropoff", "#fef2f2", "#fca5a5", "#ef4444"),
-            tooltip=f"Dropoff | {get_nearest_zone(*dropoff_point)}",
+            tooltip=f"Dropoff | {_map_location_label(*dropoff_point)}",
             z_index_offset=1000,
         )
         dropoff_marker.add_to(map_object)

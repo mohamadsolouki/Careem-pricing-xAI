@@ -31,6 +31,8 @@ EXCLUDE = [
     "booking_status", "cancellation_reason",
     "captain_rating", "customer_rating", "eta_deviation_min",
     "active_event", "pickup_zone", "dropoff_zone",
+    "pickup_neighborhood", "dropoff_neighborhood",
+    "pickup_location_source", "dropoff_location_source",
     "pickup_area_type", "dropoff_area_type", "quarter",
     "weather_source", "weather_label",
     "traffic_source", "traffic_condition", "route_source",
