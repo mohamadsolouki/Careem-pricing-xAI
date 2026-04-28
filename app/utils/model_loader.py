@@ -43,6 +43,78 @@ def load_metrics():
         return json.load(metrics_file)
 
 
+def get_interval_basis_percent(metrics: dict | None = None) -> int:
+    metrics = metrics or load_metrics()
+    return int(metrics.get("prediction_interval_basis_percent", 80))
+
+
+def get_global_interval_half_width(metrics: dict | None = None) -> float:
+    metrics = metrics or load_metrics()
+    basis_percent = get_interval_basis_percent(metrics)
+    value = metrics.get(f"prediction_interval_{basis_percent}_half_width")
+    if value is None:
+        value = metrics.get("prediction_interval_80_half_width", 0.0)
+    return float(value)
+
+
+def estimate_trip_interval(record: dict[str, object], metrics: dict | None = None) -> dict[str, object]:
+    metrics = metrics or load_metrics()
+    basis_percent = get_interval_basis_percent(metrics)
+    global_half_width = get_global_interval_half_width(metrics)
+    adaptive_profile = metrics.get(f"prediction_interval_adaptive_{basis_percent}")
+    if not adaptive_profile:
+        return {
+            "basis_percent": basis_percent,
+            "half_width": global_half_width,
+            "label": "global-baseline",
+            "is_adaptive": False,
+            "score": None,
+            "global_half_width": global_half_width,
+        }
+
+    weights = adaptive_profile.get("score_weights", {})
+    scales = adaptive_profile.get("score_scales", {})
+    event_value = str(record.get("active_event", "None") or "None")
+    score = (
+        float(weights.get("distance", 0.0))
+        * min(max(float(record.get("route_distance_km", 0.0)) / max(float(scales.get("distance_p90", 1.0)), 1.0), 0.0), 1.5)
+        + float(weights.get("traffic", 0.0))
+        * min(max(max(float(record.get("traffic_index", 1.0)) - 1.0, 0.0) / max(float(scales.get("traffic_excess_p90", 0.1)), 0.1), 0.0), 1.5)
+        + float(weights.get("demand", 0.0))
+        * min(max(max(float(record.get("demand_index", 1.0)) - 1.0, 0.0) / max(float(scales.get("demand_excess_p90", 0.1)), 0.1), 0.0), 1.5)
+        + float(weights.get("airport", 0.0)) * float(bool(record.get("is_airport_ride", False)))
+        + float(weights.get("event", 0.0)) * float(event_value != "None")
+        + float(weights.get("peak", 0.0)) * float(bool(record.get("is_peak_hour", False)))
+    )
+
+    bin_edges = adaptive_profile.get("bin_edges", [])
+    bin_labels = adaptive_profile.get("bin_labels", [])
+    bin_half_widths = adaptive_profile.get("bin_half_widths", [])
+    if len(bin_edges) < 2 or not bin_labels or not bin_half_widths:
+        return {
+            "basis_percent": basis_percent,
+            "half_width": global_half_width,
+            "label": "global-baseline",
+            "is_adaptive": False,
+            "score": round(float(score), 3),
+            "global_half_width": global_half_width,
+        }
+
+    bin_index = 0
+    for edge in bin_edges[1:-1]:
+        if score > float(edge):
+            bin_index += 1
+    bin_index = min(bin_index, len(bin_half_widths) - 1, len(bin_labels) - 1)
+    return {
+        "basis_percent": basis_percent,
+        "half_width": float(bin_half_widths[bin_index]),
+        "label": str(bin_labels[bin_index]),
+        "is_adaptive": True,
+        "score": round(float(score), 3),
+        "global_half_width": global_half_width,
+    }
+
+
 @st.cache_data(show_spinner=False)
 def load_shap_bundle():
     with open(MODELS_DIR / "shap_values.pkl", "rb") as shap_file:

@@ -54,6 +54,57 @@
   "n_validation": 25109,
   "n_test": 30258,
   "best_iteration": 181,
-  "prediction_interval_90_half_width": 11.45,
-  "prediction_interval_90_coverage": 0.8929
+  "prediction_interval_basis_percent": 80,
+  "prediction_interval_80_half_width": 7.82,
+  "prediction_interval_80_coverage": 0.7894,
+  "prediction_interval_adaptive_80": {
+    "target_percent": 80,
+    "bin_labels": [
+      "lower-complexity",
+      "mid-complexity",
+      "higher-complexity"
+    ],
+    "bin_edges": [
+      0.0426,
+      0.2822,
+      0.4925,
+      1.2276
+    ],
+    "bin_half_widths": [
+      4.8,
+      8.01,
+      11.07
+    ],
+    "bin_validation_counts": [
+      8286,
+      8286,
+      8537
+    ],
+    "bin_test_counts": [
+      9751,
+      9826,
+      10681
+    ],
+    "bin_test_coverages": [
+      0.7952,
+      0.7873,
+      0.7898
+    ],
+    "score_weights": {
+      "distance": 0.35,
+      "traffic": 0.25,
+      "demand": 0.2,
+      "airport": 0.1,
+      "event": 0.05,
+      "peak": 0.05
+    },
+    "score_scales": {
+      "distance_p90": 37.3,
+      "traffic_excess_p90": 0.253,
+      "demand_excess_p90": 0.534
+    },
+    "adaptive_test_coverage": 0.7907,
+    "adaptive_mean_half_width_on_test": 8.05,
+    "global_baseline_half_width": 7.82
+  }
 }

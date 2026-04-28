@@ -14,7 +14,7 @@ for path in (APP_DIR, PROJECT_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from utils.model_loader import load_dataset_profile, load_metrics, load_model_version, load_shap_bundle
+from utils.model_loader import get_global_interval_half_width, get_interval_basis_percent, load_dataset_profile, load_metrics, load_model_version, load_shap_bundle
 from utils.ui import apply_theme, card, hero, section_header, sidebar_brand
 
 
@@ -26,6 +26,8 @@ profile = load_dataset_profile()
 shap_bundle = load_shap_bundle()
 version = load_model_version()
 shap_summary = pd.DataFrame(shap_bundle["summary"])
+_interval_basis_percent = get_interval_basis_percent(metrics)
+_interval_half_width = get_global_interval_half_width(metrics)
 
 hero(
     "XPrice — Explainable Ride Pricing",
@@ -45,9 +47,8 @@ with st.sidebar:
     _cv = metrics.get("cv", {})
     if _cv.get("r2_mean") is not None:
         st.markdown(f"- **CV R² (5-fold):** {_cv['r2_mean']:.4f} ± {_cv['r2_std']:.4f}")
-    _pi_hw = metrics.get("prediction_interval_90_half_width")
-    if _pi_hw:
-        st.markdown(f"- **90% PI half-width:** ±AED {_pi_hw:.2f}")
+    if _interval_half_width:
+        st.markdown(f"- **{_interval_basis_percent}% PI half-width:** ±AED {_interval_half_width:.2f}")
     if version.get("training_date"):
         st.caption(f"Model trained {version['training_date'][:10]}")
 

@@ -42,6 +42,122 @@ FIG_DIR   = os.path.join(BASE_DIR, "docs", "figures")
 os.makedirs(SAVE_DIR, exist_ok=True)
 os.makedirs(FIG_DIR,  exist_ok=True)
 
+INTERVAL_TARGET_PERCENT = 80
+ADAPTIVE_INTERVAL_BIN_LABELS = [
+    "lower-complexity",
+    "mid-complexity",
+    "higher-complexity",
+]
+ADAPTIVE_INTERVAL_WEIGHTS = {
+    "distance": 0.35,
+    "traffic": 0.25,
+    "demand": 0.20,
+    "airport": 0.10,
+    "event": 0.05,
+    "peak": 0.05,
+}
+
+
+def _compute_uncertainty_score(
+    frame: pd.DataFrame,
+    score_scales: dict[str, float],
+    score_weights: dict[str, float],
+) -> np.ndarray:
+    distance_scale = max(float(score_scales["distance_p90"]), 1.0)
+    traffic_scale = max(float(score_scales["traffic_excess_p90"]), 0.1)
+    demand_scale = max(float(score_scales["demand_excess_p90"]), 0.1)
+    event_flag = frame["active_event"].fillna("None").astype(str).ne("None").astype(float)
+
+    score = (
+        score_weights["distance"]
+        * np.clip(frame["route_distance_km"].astype(float) / distance_scale, 0.0, 1.5)
+        + score_weights["traffic"]
+        * np.clip((frame["traffic_index"].astype(float) - 1.0).clip(lower=0.0) / traffic_scale, 0.0, 1.5)
+        + score_weights["demand"]
+        * np.clip((frame["demand_index"].astype(float) - 1.0).clip(lower=0.0) / demand_scale, 0.0, 1.5)
+        + score_weights["airport"] * frame["is_airport_ride"].astype(float)
+        + score_weights["event"] * event_flag
+        + score_weights["peak"] * frame["is_peak_hour"].astype(float)
+    )
+    return np.asarray(score, dtype=float)
+
+
+def _build_adaptive_interval_profile(
+    validation_frame: pd.DataFrame,
+    validation_abs_residuals: np.ndarray,
+    test_frame: pd.DataFrame,
+    test_abs_residuals: np.ndarray,
+    target_percent: int,
+) -> dict[str, object]:
+    score_scales = {
+        "distance_p90": max(float(validation_frame["route_distance_km"].quantile(0.90)), 1.0),
+        "traffic_excess_p90": max(
+            float((validation_frame["traffic_index"] - 1.0).clip(lower=0.0).quantile(0.90)),
+            0.1,
+        ),
+        "demand_excess_p90": max(
+            float((validation_frame["demand_index"] - 1.0).clip(lower=0.0).quantile(0.90)),
+            0.1,
+        ),
+    }
+    validation_scores = _compute_uncertainty_score(
+        validation_frame,
+        score_scales=score_scales,
+        score_weights=ADAPTIVE_INTERVAL_WEIGHTS,
+    )
+    bin_edges = np.quantile(validation_scores, [0.0, 0.33, 0.66, 1.0]).astype(float)
+    for idx in range(1, len(bin_edges)):
+        if bin_edges[idx] <= bin_edges[idx - 1]:
+            bin_edges[idx] = bin_edges[idx - 1] + 1e-6
+
+    validation_bins = np.digitize(validation_scores, bin_edges[1:-1], right=True)
+    test_scores = _compute_uncertainty_score(
+        test_frame,
+        score_scales=score_scales,
+        score_weights=ADAPTIVE_INTERVAL_WEIGHTS,
+    )
+    test_bins = np.digitize(test_scores, bin_edges[1:-1], right=True)
+
+    global_half_width = float(np.percentile(validation_abs_residuals, target_percent))
+    adaptive_half_widths = np.full(len(test_abs_residuals), global_half_width, dtype=float)
+    bin_half_widths = []
+    bin_validation_counts = []
+    bin_test_counts = []
+    bin_test_coverages = []
+
+    for idx, _label in enumerate(ADAPTIVE_INTERVAL_BIN_LABELS):
+        validation_mask = validation_bins == idx
+        half_width = global_half_width
+        if np.any(validation_mask):
+            half_width = float(np.percentile(validation_abs_residuals[validation_mask], target_percent))
+        bin_half_widths.append(round(float(half_width), 2))
+        bin_validation_counts.append(int(np.sum(validation_mask)))
+
+        test_mask = test_bins == idx
+        adaptive_half_widths[test_mask] = half_width
+        bin_test_counts.append(int(np.sum(test_mask)))
+        if np.any(test_mask):
+            bin_test_coverages.append(round(float(np.mean(test_abs_residuals[test_mask] <= half_width)), 4))
+        else:
+            bin_test_coverages.append(None)
+
+    adaptive_test_coverage = float(np.mean(test_abs_residuals <= adaptive_half_widths))
+    adaptive_mean_half_width_on_test = float(np.mean(adaptive_half_widths))
+    return {
+        "target_percent": int(target_percent),
+        "bin_labels": ADAPTIVE_INTERVAL_BIN_LABELS,
+        "bin_edges": [round(float(value), 4) for value in bin_edges],
+        "bin_half_widths": bin_half_widths,
+        "bin_validation_counts": bin_validation_counts,
+        "bin_test_counts": bin_test_counts,
+        "bin_test_coverages": bin_test_coverages,
+        "score_weights": {key: round(float(value), 4) for key, value in ADAPTIVE_INTERVAL_WEIGHTS.items()},
+        "score_scales": {key: round(float(value), 4) for key, value in score_scales.items()},
+        "adaptive_test_coverage": round(adaptive_test_coverage, 4),
+        "adaptive_mean_half_width_on_test": round(adaptive_mean_half_width_on_test, 2),
+        "global_baseline_half_width": round(global_half_width, 2),
+    }
+
 # ─── 1. Load data ─────────────────────────────────────────────────────────────
 print("Loading dataset...")
 df = pd.read_csv(DATA_PATH, low_memory=False)
@@ -77,6 +193,8 @@ X_val = X.loc[validation_mask].reset_index(drop=True)
 y_val = y.loc[validation_mask].reset_index(drop=True)
 X_test = X.loc[test_mask].reset_index(drop=True)
 y_test = y.loc[test_mask].reset_index(drop=True)
+validation_frame = df.loc[validation_mask].reset_index(drop=True)
+test_frame = df.loc[test_mask].reset_index(drop=True)
 
 print(f"  Train months: {train_months} → {len(X_train):,} rows")
 print(f"  Validation months: {validation_months} → {len(X_val):,} rows")
@@ -153,13 +271,27 @@ train_metrics = calc_metrics(y_train, y_pred_train, "TRAIN")
 validation_metrics = calc_metrics(y_val, y_pred_val, "VALID")
 test_metrics  = calc_metrics(y_test,  y_pred_test,  "TEST ")
 
-# Conformal prediction interval: calibrate on validation, evaluate on test.
+# Prediction intervals: global baseline on validation, plus adaptive per-trip bins.
 _val_abs_residuals = np.abs(np.array(y_val) - y_pred_val)
 _test_abs_residuals = np.abs(np.array(y_test) - y_pred_test)
-_pi90_half_width = float(np.percentile(_val_abs_residuals, 90))
-_pi90_coverage  = float(np.mean(_test_abs_residuals <= _pi90_half_width))
-print(f"  Conformal 90% PI half-width: ±AED {_pi90_half_width:.2f}  "
-      f"(calibrated on validation, coverage on test: {_pi90_coverage * 100:.1f}%)")
+_pi80_half_width = float(np.percentile(_val_abs_residuals, INTERVAL_TARGET_PERCENT))
+_pi80_coverage = float(np.mean(_test_abs_residuals <= _pi80_half_width))
+_adaptive_interval_80 = _build_adaptive_interval_profile(
+    validation_frame=validation_frame,
+    validation_abs_residuals=_val_abs_residuals,
+    test_frame=test_frame,
+    test_abs_residuals=_test_abs_residuals,
+    target_percent=INTERVAL_TARGET_PERCENT,
+)
+print(f"  Global {INTERVAL_TARGET_PERCENT}% PI half-width: ±AED {_pi80_half_width:.2f}  "
+      f"(calibrated on validation, coverage on test: {_pi80_coverage * 100:.1f}%)")
+print(
+    "  Adaptive 80% trip bands: "
+    f"{ADAPTIVE_INTERVAL_BIN_LABELS[0]} ±AED {_adaptive_interval_80['bin_half_widths'][0]:.2f} | "
+    f"{ADAPTIVE_INTERVAL_BIN_LABELS[1]} ±AED {_adaptive_interval_80['bin_half_widths'][1]:.2f} | "
+    f"{ADAPTIVE_INTERVAL_BIN_LABELS[2]} ±AED {_adaptive_interval_80['bin_half_widths'][2]:.2f} "
+    f"(overall held-out coverage: {_adaptive_interval_80['adaptive_test_coverage'] * 100:.1f}%)"
+)
 
 metrics = {
     "train": {k: round(float(v), 4) for k, v in train_metrics.items()},
@@ -181,8 +313,10 @@ metrics = {
     "n_validation": int(len(X_val)),
     "n_test":  int(len(X_test)),
     "best_iteration": int(model.best_iteration) if hasattr(model, "best_iteration") else params["n_estimators"],
-    "prediction_interval_90_half_width": round(_pi90_half_width, 2),
-    "prediction_interval_90_coverage":   round(_pi90_coverage, 4),
+    "prediction_interval_basis_percent": INTERVAL_TARGET_PERCENT,
+    "prediction_interval_80_half_width": round(_pi80_half_width, 2),
+    "prediction_interval_80_coverage":   round(_pi80_coverage, 4),
+    "prediction_interval_adaptive_80": _adaptive_interval_80,
 }
 
 metrics_path = os.path.join(SAVE_DIR, "model_metrics.json")
@@ -213,6 +347,10 @@ _version_meta = {
     "validation_r2":  metrics["validation"]["r2"],
     "test_r2":        metrics["test"]["r2"],
     "cv_r2_mean":     metrics["cv"]["r2_mean"],
+    "interval_basis_percent": INTERVAL_TARGET_PERCENT,
+    "prediction_interval_80_half_width": metrics["prediction_interval_80_half_width"],
+    "prediction_interval_80_coverage": metrics["prediction_interval_80_coverage"],
+    "prediction_interval_adaptive_80_coverage": metrics["prediction_interval_adaptive_80"]["adaptive_test_coverage"],
 }
 version_path = os.path.join(SAVE_DIR, "model_version.json")
 with open(version_path, "w") as f:

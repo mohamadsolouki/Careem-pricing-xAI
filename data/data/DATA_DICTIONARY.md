@@ -22,12 +22,15 @@ Zones are detected from the generated pickup and dropoff coordinates using Shape
 | Test MAE | 5.35 AED |
 | Test MAPE | 5.99% |
 | CV R² (5-fold forward month) | 0.9767 ± 0.0006 |
-| 90% prediction interval | ± AED 11.45 (calibrated on validation, 89.3% test coverage) |
+| 80% global prediction interval | ± AED 7.82 (calibrated on validation, 78.9% test coverage) |
+| Adaptive 80% rider bands | ± AED 4.80 / ± AED 8.01 / ± AED 11.07 (79.1% held-out coverage overall) |
 | Training samples | 94,596 |
 | Validation samples | 25,109 |
 | Test samples | 30,258 |
 | Features used | 76 |
 | SHAP pool size | 5,000 rides |
+
+The global 80% band is used in dashboard summaries. Rider-facing quote surfaces use the adaptive 80% bands, which are selected from validation-calibrated low-, mid-, and high-complexity buckets using route distance, traffic, demand, airport, event, and peak-period signals.
 
 ### Top SHAP Features (mean absolute tree contribution, AED)
 `distance_x_traffic` (14.90), `route_distance_km` (14.67), `is_hala_product` (14.26), `demand_index` (4.96), `product_type_Premier` (4.48), `product_type_MAX` (4.03), `salik_gates` (2.61), `product_type_Hala Taxi` (2.28), `product_type_Executive` (2.07)

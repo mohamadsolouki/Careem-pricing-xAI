@@ -617,10 +617,17 @@ def section_header(title: str) -> None:
     )
 
 
-def fare_result(label: str, value_aed: float, sub: str = "", low_aed: float | None = None, high_aed: float | None = None) -> None:
+def fare_result(
+    label: str,
+    value_aed: float,
+    sub: str = "",
+    low_aed: float | None = None,
+    high_aed: float | None = None,
+    interval_label: str = "80% range",
+) -> None:
     interval_html = ""
     if low_aed is not None and high_aed is not None:
-        interval_html = f'<div class="fare-interval">90% range: AED {low_aed:,.2f}&nbsp;–&nbsp;AED {high_aed:,.2f}</div>'
+        interval_html = f'<div class="fare-interval">{interval_label}: AED {low_aed:,.2f}&nbsp;–&nbsp;AED {high_aed:,.2f}</div>'
     sub_html = f'<div class="fare-sub">{sub}</div>' if sub else ""
     st.markdown(
         f"""<div class="xprice-fare-box">
@@ -633,13 +640,19 @@ def fare_result(label: str, value_aed: float, sub: str = "", low_aed: float | No
     )
 
 
-def whatif_result(predicted: float, reference: float, low_aed: float | None = None, high_aed: float | None = None) -> None:
+def whatif_result(
+    predicted: float,
+    reference: float,
+    low_aed: float | None = None,
+    high_aed: float | None = None,
+    interval_label: str = "80% range",
+) -> None:
     delta = predicted - reference
     sign = "+" if delta >= 0 else ""
     delta_color = "#059669" if delta <= 0 else "#dc2626"
     interval_html = ""
     if low_aed is not None and high_aed is not None:
-        interval_html = f'<div class="wi-interval">90% range: AED {low_aed:,.2f}&nbsp;–&nbsp;AED {high_aed:,.2f}</div>'
+        interval_html = f'<div class="wi-interval">{interval_label}: AED {low_aed:,.2f}&nbsp;–&nbsp;AED {high_aed:,.2f}</div>'
     st.markdown(
         f"""<div class="xprice-whatif-banner">
             <div class="wi-label">What-if predicted fare</div>

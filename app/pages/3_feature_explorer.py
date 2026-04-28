@@ -19,7 +19,7 @@ for path in (APP_DIR, PROJECT_ROOT):
         sys.path.insert(0, str(path))
 
 from utils.domain import DEFAULT_DROPOFF_POINT, DEFAULT_PICKUP_POINT, PAYMENT_METHODS, PRODUCT_NAMES, build_inference_frame, build_trip_record
-from utils.model_loader import load_feature_columns, load_metrics, load_model, load_model_version, load_shap_bundle
+from utils.model_loader import estimate_trip_interval, get_global_interval_half_width, get_interval_basis_percent, load_feature_columns, load_metrics, load_model, load_model_version, load_shap_bundle
 from utils.nlp_explainer import build_explanation
 from utils.routing_api import get_route_context
 from utils.shap_engine import compute_local_contributions, plot_dependence, plot_waterfall
@@ -43,7 +43,8 @@ feature_columns = load_feature_columns()
 bundle = load_shap_bundle()
 metrics = load_metrics()
 version = load_model_version()
-_pi90_half_width = metrics.get("prediction_interval_90_half_width", 0.0)
+_interval_basis_percent = get_interval_basis_percent(metrics)
+_interval_half_width = get_global_interval_half_width(metrics)
 sample_features = bundle["sample_features"].copy()
 contrib_values = bundle["values"]
 
@@ -87,7 +88,7 @@ with st.sidebar:
         f"- **Test R\u00b2:** {metrics['test']['r2']:.4f}  \n"
         f"- **RMSE:** AED {metrics['test']['rmse']:.2f}  \n"
         f"- **CV R\u00b2:** {metrics['cv']['r2_mean']:.4f} \u00b1 {metrics['cv']['r2_std']:.4f}  \n"
-        f"- **90% PI:** \u00b1AED {_pi90_half_width:.2f}"
+        f"- **{_interval_basis_percent}% PI:** \u00b1AED {_interval_half_width:.2f}"
     )
     if version.get("training_date"):
         st.caption(f"Trained {version['training_date'][:10]}")
@@ -319,9 +320,21 @@ explanation = build_explanation(scenario_record, contribution_series, predicted_
 st.markdown("<br>", unsafe_allow_html=True)
 lab_left, lab_right = st.columns([1.0, 1.0], gap="large")
 with lab_left:
-    _wi_low  = max(0.0, predicted_price - _pi90_half_width)
-    _wi_high = predicted_price + _pi90_half_width
-    whatif_result(predicted_price, float(scenario_record["final_price_aed"]), low_aed=_wi_low, high_aed=_wi_high)
+    _scenario_interval = estimate_trip_interval(scenario_record, metrics)
+    _wi_low  = max(0.0, predicted_price - _scenario_interval["half_width"])
+    _wi_high = predicted_price + _scenario_interval["half_width"]
+    whatif_result(
+        predicted_price,
+        float(scenario_record["final_price_aed"]),
+        low_aed=_wi_low,
+        high_aed=_wi_high,
+        interval_label=f"{_scenario_interval['basis_percent']}% range",
+    )
+    if _scenario_interval["is_adaptive"]:
+        st.caption(
+            f"Adaptive {_scenario_interval['basis_percent']}% band: {_scenario_interval['label']} scenario ±AED {_scenario_interval['half_width']:.2f} "
+            f"(global baseline ±AED {_scenario_interval['global_half_width']:.2f})."
+        )
     metric_row = st.columns(3)
     metric_row[0].metric("Route source", scenario_record.get("route_source", "Synthetic"))
     metric_row[1].metric("Traffic source", scenario_record.get("traffic_source", "Synthetic"))

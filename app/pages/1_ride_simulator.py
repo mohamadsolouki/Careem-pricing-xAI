@@ -17,7 +17,7 @@ for path in (APP_DIR, PROJECT_ROOT):
 
 from utils.domain import DEFAULT_DROPOFF_POINT, DEFAULT_PICKUP_POINT, PAYMENT_METHODS, PRODUCT_NAMES, build_inference_frame, build_trip_record, get_location_context
 from utils.geo_utils import build_picker_map
-from utils.model_loader import load_feature_columns, load_metrics, load_model, load_model_version
+from utils.model_loader import estimate_trip_interval, get_global_interval_half_width, get_interval_basis_percent, load_feature_columns, load_metrics, load_model, load_model_version
 from utils.nlp_explainer import build_explanation
 from utils.routing_api import get_route_context
 from utils.shap_engine import compute_local_contributions, plot_waterfall
@@ -169,7 +169,8 @@ default_date = date(today.year, today.month, default_day)
 model = load_model()
 feature_columns = load_feature_columns()
 metrics = load_metrics()
-_pi90_half_width = metrics.get("prediction_interval_90_half_width", 0.0)
+_interval_basis_percent = get_interval_basis_percent(metrics)
+_interval_half_width = get_global_interval_half_width(metrics)
 version_sim = load_model_version()
 
 if "pickup_point" not in st.session_state:
@@ -349,6 +350,7 @@ with top_left:
         feature_frame, _ = build_inference_frame(record, feature_columns)
         contribution_series, base_value, predicted_price = compute_local_contributions(model, feature_frame)
         explanation = build_explanation(record, contribution_series, predicted_price, base_value)
+        quote_interval = estimate_trip_interval(record, metrics)
 
         pickup_summary, dropoff_summary = st.columns(2, gap="small")
         with pickup_summary:
@@ -381,14 +383,19 @@ with top_right:
     with st.container(border=True):
         section_header("Fare quote")
         anchor_delta = predicted_price - float(record["final_price_aed"])
-        _pi_low = max(0.0, predicted_price - _pi90_half_width)
-        _pi_high = predicted_price + _pi90_half_width
+        _pi_low = max(0.0, predicted_price - quote_interval["half_width"])
+        _pi_high = predicted_price + quote_interval["half_width"]
         fare_result(
             f"{product_type} / {_location_primary_label(record['pickup_neighborhood'], record['pickup_zone'])} -> {_location_primary_label(record['dropoff_neighborhood'], record['dropoff_zone'])}",
             predicted_price,
-            sub=f"{record['pickup_zone']} zone -> {record['dropoff_zone']} zone | Engine anchor AED {record['final_price_aed']:,.2f} | Model vs engine: {'+' if anchor_delta >= 0 else ''}{anchor_delta:.2f} AED",
+            sub=(
+                f"{record['pickup_zone']} zone -> {record['dropoff_zone']} zone | Engine anchor AED {record['final_price_aed']:,.2f} | "
+                f"Model vs engine: {'+' if anchor_delta >= 0 else ''}{anchor_delta:.2f} AED | "
+                f"Adaptive {_interval_basis_percent}% band: {quote_interval['label']} trip"
+            ),
             low_aed=_pi_low,
             high_aed=_pi_high,
+            interval_label=f"{quote_interval['basis_percent']}% range",
         )
         quote_metrics_top = st.columns(2, gap="small")
         quote_metrics_bottom = st.columns(2, gap="small")
@@ -412,8 +419,12 @@ with top_right:
         model_metrics = st.columns(3)
         model_metrics[0].metric("Test R²", f"{metrics['test']['r2']:.4f}")
         model_metrics[1].metric("RMSE", f"AED {metrics['test']['rmse']:.2f}")
-        model_metrics[2].metric("90% PI", f"±AED {_pi90_half_width:.2f}")
+        model_metrics[2].metric(f"{_interval_basis_percent}% PI", f"±AED {_interval_half_width:.2f}")
         st.caption(f"CV R² {metrics['cv']['r2_mean']:.4f} ± {metrics['cv']['r2_std']:.4f}")
+        st.caption(
+            f"Quote card uses adaptive {_interval_basis_percent}% trip bands. This ride is in the {quote_interval['label']} bucket at ±AED {quote_interval['half_width']:.2f}; "
+            f"the global baseline remains ±AED {_interval_half_width:.2f}."
+        )
         if version_sim.get("training_date"):
             st.caption(f"Trained {version_sim['training_date'][:10]}")
 

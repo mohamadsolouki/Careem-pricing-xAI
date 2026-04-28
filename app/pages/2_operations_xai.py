@@ -15,7 +15,7 @@ for path in (APP_DIR, PROJECT_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from utils.model_loader import load_feature_columns, load_metrics, load_model, load_model_version, load_shap_bundle
+from utils.model_loader import get_global_interval_half_width, get_interval_basis_percent, load_feature_columns, load_metrics, load_model, load_model_version, load_shap_bundle
 from utils.shap_engine import build_top_driver_frame, plot_beeswarm, plot_dependence, plot_importance_bar
 from utils.ui import apply_theme, hero, section_header, sidebar_brand
 
@@ -34,6 +34,8 @@ model = load_model()
 feature_columns_list = load_feature_columns()
 metrics = load_metrics()
 version = load_model_version()
+_interval_basis_percent = get_interval_basis_percent(metrics)
+_interval_half_width = get_global_interval_half_width(metrics)
 sample_raw = bundle["sample_raw"].copy()
 sample_features = bundle["sample_features"].copy()
 contrib_values = bundle["values"]
@@ -51,7 +53,7 @@ with st.sidebar:
     st.caption(
         f"R² {metrics['test']['r2']:.4f} · RMSE AED {metrics['test']['rmse']:.2f}\n\n"
         f"CV R² {metrics['cv']['r2_mean']:.4f} ± {metrics['cv']['r2_std']:.4f}\n\n"
-        f"±AED {metrics.get('prediction_interval_90_half_width', 0):.2f} (90% PI)"
+        f"±AED {_interval_half_width:.2f} ({_interval_basis_percent}% PI)"
     )
     if version.get("training_date"):
         st.caption(f"Trained {version['training_date'][:10]}")

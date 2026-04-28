@@ -132,7 +132,7 @@ Deliverable: `notebooks/02_eda.ipynb` + key figures saved to `docs/figures/`
 - Cyclical encoding: hour (sin/cos), day of week (sin/cos), month (sin/cos)
 - Interaction features: peak × traffic, demand × traffic, efficiency × traffic, bearing sin/cos, and coordinate deltas
 
-**Train/validation/test split:** chronological by month, with January-August used for training, September-October used for validation and early stopping, and November-December reserved for final held-out testing. Prediction intervals are calibrated on validation residuals, not on the test set.
+**Train/validation/test split:** chronological by month, with January-August used for training, September-October used for validation and early stopping, and November-December reserved for final held-out testing. Interval calibration is validation-based and now uses an 80% basis: a simple global baseline for dashboard reporting plus adaptive rider-facing quote bands for low-, mid-, and high-complexity trips.
 
 Deliverables:
 - `models/train_model.py`

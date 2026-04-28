@@ -11,7 +11,8 @@ XPrice is a research-oriented Streamlit application and analytics pipeline for e
 | Test RMSE | **AED 7.99** |
 | Test MAE | **AED 5.35** |
 | CV R² (5-fold forward month) | **0.9767 ± 0.0006** |
-| 90% prediction interval | **± AED 11.45** (calibrated on validation, 89.3% test coverage) |
+| 80% global prediction interval | **± AED 7.82** (calibrated on validation, 78.9% test coverage) |
+| Adaptive rider-facing 80% bands | **± AED 4.80 / ± AED 8.01 / ± AED 11.07** (79.1% held-out coverage overall) |
 | Train / validation / test rows | 94,596 / 25,109 / 30,258 |
 | Features | 76 |
 | SHAP explanation pool | 5,000 rides |
@@ -21,11 +22,11 @@ XPrice is a research-oriented Streamlit application and analytics pipeline for e
 - A synthetic 165,000-row Dubai ride-hailing dataset with 72 columns, polygon-resolved pickup and dropoff neighborhood metadata, and hidden policy drift plus heteroskedastic noise so the market is less deterministic.
 - A coordinate-first pricing model that learns from route geometry, density, weather, demand, and traffic signals.
 - XAI artefacts built with XGBoost native tree contribution outputs (no shap library dependency).
-- Conformal prediction intervals (±AED 11.45, calibrated on validation and covering 89.3% of the held-out test set) displayed on every fare quote.
+- Validation-calibrated 80% interval bands: a simple global baseline of ±AED 7.82 for dashboard summaries, plus adaptive rider-facing bands of ±AED 4.80, ±AED 8.01, and ±AED 11.07 by trip complexity.
 - A Streamlit app with three pages:
-  - **Rider Simulator**: draggable pickup/dropoff pins, official neighborhood boundary overlay, polygon-resolved area labels, fare quote, 90% prediction interval, and waterfall explanation.
+  - **Rider Simulator**: draggable pickup/dropoff pins, official neighborhood boundary overlay, polygon-resolved area labels, adaptive 80% quote range, and waterfall explanation.
   - **Operations Dashboard**: filtered global contribution analysis with zone heatmaps, hourly patterns, event breakdowns, and a residuals tab for model quality audit.
-  - **Feature Explorer**: PDP + ICE curves, SHAP dependence plots, what-if lab with manual overrides, and a **LIME vs SHAP** method comparison panel.
+  - **Feature Explorer**: PDP + ICE curves, SHAP dependence plots, what-if lab with adaptive 80% ranges, and a **LIME vs SHAP** method comparison panel.
 
 ## Project Structure
 
@@ -147,6 +148,7 @@ Live weather and live traffic are only used for rides scheduled for the current 
 - The repo uses XGBoost native `pred_contribs=True` for explanation export.
 - Model training now uses a chronological split: January-August for training, September-October for validation/early stopping, and November-December for the final held-out test set.
 - The synthetic fare generator injects hidden month, product, and zone policy drift plus heteroskedastic residual noise, so the model is a learned approximation of a noisy synthetic market rather than a near-exact fare formula replica.
+- Dashboard surfaces report the simple global 80% interval baseline (±AED 7.82), while rider-facing quote surfaces use adaptive 80% trip bands calibrated from validation residuals by trip complexity.
 - The app is designed to work without external API keys.
 - Route context uses OSRM when available and a deterministic fallback when not.
 - Neighborhood labels and map boundaries come from the shared Dubai GeoJSON in `zone_config.py`, with Shapely-backed point-in-polygon lookup and centroid fallback outside mapped polygons.
