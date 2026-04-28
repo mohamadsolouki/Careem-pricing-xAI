@@ -27,7 +27,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import xgboost as xgb
 
@@ -61,29 +60,35 @@ X, y, FEATURE_COLS, df_enc = prepare_training_frame(df)
 print(f"  Features: {len(FEATURE_COLS)}")
 print(f"  Target range: AED {y.min():.2f} – {y.max():.2f} | Mean: {y.mean():.2f}")
 
-# ─── 4. Train / Test Split (stratified by month) ─────────────────────────────
-print("Splitting train/test by month...")
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.20, random_state=42, stratify=month_labels
-)
-print(f"  Train: {len(X_train):,} | Test: {len(X_test):,}")
+# ─── 4. Chronological Train / Validation / Test Split ────────────────────────
+print("Splitting train/validation/test chronologically by month...")
+sorted_months = [int(month) for month in sorted(df["month"].unique())]
+train_months = sorted_months[:8]
+validation_months = sorted_months[8:10]
+test_months = sorted_months[10:]
 
-# ─── 4b. Time-series block cross-validation (5-fold expanding window) ────────
-print("Running 5-fold time-series block CV...")
-_sorted_months = sorted(df["month"].unique())
-_n_months = len(_sorted_months)
-_fold_size = max(1, _n_months // 5)   # ~2-3 months per fold
+train_mask = np.isin(month_labels, train_months)
+validation_mask = np.isin(month_labels, validation_months)
+test_mask = np.isin(month_labels, test_months)
+
+X_train = X.loc[train_mask].reset_index(drop=True)
+y_train = y.loc[train_mask].reset_index(drop=True)
+X_val = X.loc[validation_mask].reset_index(drop=True)
+y_val = y.loc[validation_mask].reset_index(drop=True)
+X_test = X.loc[test_mask].reset_index(drop=True)
+y_test = y.loc[test_mask].reset_index(drop=True)
+
+print(f"  Train months: {train_months} → {len(X_train):,} rows")
+print(f"  Validation months: {validation_months} → {len(X_val):,} rows")
+print(f"  Test months: {test_months} → {len(X_test):,} rows")
+
+# ─── 4b. Forward month CV (5 folds, descriptive only) ───────────────────────
+print("Running 5-fold forward month CV...")
 cv_r2_scores = []
-for _fold in range(5):
-    _train_end = _fold_size * (_fold + 3)          # expanding window: at least 3 months of history
-    _test_start = _train_end
-    _test_end   = _test_start + _fold_size
-    if _test_start >= _n_months:
-        break
-    _train_months = _sorted_months[:_train_end]
-    _test_months  = _sorted_months[_test_start:_test_end]
+for _fold, _test_month in enumerate(sorted_months[-5:], start=1):
+    _train_months = [month for month in sorted_months if month < _test_month]
     _tr_mask = np.isin(month_labels, _train_months)
-    _te_mask = np.isin(month_labels, _test_months)
+    _te_mask = month_labels == _test_month
     if _tr_mask.sum() == 0 or _te_mask.sum() == 0:
         break
     _cv_model = xgb.XGBRegressor(
@@ -96,8 +101,8 @@ for _fold in range(5):
     _cv_pred = _cv_model.predict(X.iloc[_te_mask])
     _fold_r2 = r2_score(y.iloc[_te_mask], _cv_pred)
     cv_r2_scores.append(_fold_r2)
-    print(f"  Fold {_fold+1}: train months {_train_months[:3]}…{_train_months[-1]}, "
-          f"test months {_test_months} → R²={_fold_r2:.4f}")
+    print(f"  Fold {_fold}: train months {_train_months[0]}–{_train_months[-1]}, "
+          f"test month [{_test_month}] → R²={_fold_r2:.4f}")
 if cv_r2_scores:
     print(f"  CV R² mean={np.mean(cv_r2_scores):.4f}  std={np.std(cv_r2_scores):.4f}  "
           f"min={np.min(cv_r2_scores):.4f}  max={np.max(cv_r2_scores):.4f}")
@@ -126,13 +131,14 @@ params = {
 model = xgb.XGBRegressor(**params)
 model.fit(
     X_train, y_train,
-    eval_set=[(X_test, y_test)],
+    eval_set=[(X_val, y_val)],
     verbose=False,
 )
 
 # ─── 6. Evaluation ────────────────────────────────────────────────────────────
 print("Evaluating model...")
 y_pred_train = model.predict(X_train)
+y_pred_val   = model.predict(X_val)
 y_pred_test  = model.predict(X_test)
 
 def calc_metrics(y_true, y_pred, label):
@@ -144,26 +150,35 @@ def calc_metrics(y_true, y_pred, label):
     return {"rmse": rmse, "mae": mae, "r2": r2, "mape": mape}
 
 train_metrics = calc_metrics(y_train, y_pred_train, "TRAIN")
+validation_metrics = calc_metrics(y_val, y_pred_val, "VALID")
 test_metrics  = calc_metrics(y_test,  y_pred_test,  "TEST ")
 
-# Conformal prediction interval: 90th-percentile of |residual| on the test set
-# Provides a calibrated symmetric band: predicted ± half_width covers ≥90% of test rides.
-_abs_residuals = np.abs(np.array(y_test) - y_pred_test)
-_pi90_half_width = float(np.percentile(_abs_residuals, 90))
-_pi90_coverage  = float(np.mean(_abs_residuals <= _pi90_half_width))
+# Conformal prediction interval: calibrate on validation, evaluate on test.
+_val_abs_residuals = np.abs(np.array(y_val) - y_pred_val)
+_test_abs_residuals = np.abs(np.array(y_test) - y_pred_test)
+_pi90_half_width = float(np.percentile(_val_abs_residuals, 90))
+_pi90_coverage  = float(np.mean(_test_abs_residuals <= _pi90_half_width))
 print(f"  Conformal 90% PI half-width: ±AED {_pi90_half_width:.2f}  "
-      f"(actual coverage on test: {_pi90_coverage * 100:.1f}%)")
+      f"(calibrated on validation, coverage on test: {_pi90_coverage * 100:.1f}%)")
 
 metrics = {
     "train": {k: round(float(v), 4) for k, v in train_metrics.items()},
+    "validation": {k: round(float(v), 4) for k, v in validation_metrics.items()},
     "test":  {k: round(float(v), 4) for k, v in test_metrics.items()},
     "cv": {
         "r2_scores": [round(float(v), 4) for v in cv_r2_scores],
         "r2_mean":   round(float(np.mean(cv_r2_scores)), 4) if cv_r2_scores else None,
         "r2_std":    round(float(np.std(cv_r2_scores)),  4) if cv_r2_scores else None,
     },
+    "split": {
+        "strategy": "chronological-month-train-validation-test",
+        "train_months": train_months,
+        "validation_months": validation_months,
+        "test_months": test_months,
+    },
     "n_features": len(FEATURE_COLS),
     "n_train": int(len(X_train)),
+    "n_validation": int(len(X_val)),
     "n_test":  int(len(X_test)),
     "best_iteration": int(model.best_iteration) if hasattr(model, "best_iteration") else params["n_estimators"],
     "prediction_interval_90_half_width": round(_pi90_half_width, 2),
@@ -190,7 +205,12 @@ _version_meta = {
     "dataset_hash_md5_first1MB": _dataset_hash,
     "git_commit":     _git_commit,
     "n_rows_total":   len(df),
+    "n_train":        int(len(X_train)),
+    "n_validation":   int(len(X_val)),
+    "n_test":         int(len(X_test)),
+    "split_strategy": "chronological-month-train-validation-test",
     "n_features":     len(FEATURE_COLS),
+    "validation_r2":  metrics["validation"]["r2"],
     "test_r2":        metrics["test"]["r2"],
     "cv_r2_mean":     metrics["cv"]["r2_mean"],
 }

@@ -1,5 +1,5 @@
 """
-XPrice — Dubai Ride-Hailing Mirror Dataset Generator v3.0
+XPrice — Dubai Ride-Hailing Mirror Dataset Generator v3.1
 ==========================================================
 Generates ~165,000 realistic Dubai ride records for 2025.
 
@@ -10,7 +10,7 @@ Key improvements over v2:
   • Unified traffic / captain-availability formulas (shared with app inference)
   • Careem Plus 5% loyalty discount applied to private-hire fares
   • Monthly fuel-index variation on per-km rate (±AED 0.06 as per RTA policy)
-  • Realistic pricing noise (~2.5%) so R² stays meaningful (~0.85-0.90)
+    • Hidden policy drift and heteroskedastic pricing noise to keep the market less deterministic
   • Salik gate counts from zone_config.py (same as app)
 
 Pricing model calibrated to RTA November 2025 dynamic fare structure.
@@ -201,6 +201,19 @@ I_BKPK, I_BKOF, I_BKNT, I_HALA        = 5, 6, 7, 8
 I_SHREG, I_SHAPT                        = 9, 10
 SH_REG = PD[:, I_SHREG] / PD[:, I_SHREG].sum()
 SH_APT = PD[:, I_SHAPT] / PD[:, I_SHAPT].sum()
+
+# Hidden marketplace drift not written to the dataset. These shocks represent
+# temporary pricing policy tweaks, incentive changes, and local ops conditions
+# that the model cannot observe directly from the published features.
+_POLICY_RNG = np.random.default_rng(2026)
+MONTH_POLICY_DRIFT = np.array([
+    -0.004, -0.002, 0.004, 0.010, 0.016, 0.022,
+     0.028,  0.024, 0.016, 0.010, 0.004, -0.002,
+])
+PRODUCT_MONTH_POLICY_DRIFT = _POLICY_RNG.normal(0.0, 0.010, size=(len(PROD_NAMES), 12))
+ZONE_DAY_POLICY_DRIFT = _POLICY_RNG.normal(0.0, 0.012, size=(365, N_ZONES))
+DAY_POLICY_WALK = np.cumsum(_POLICY_RNG.normal(0.0, 0.0015, size=365))
+DAY_POLICY_WALK = np.clip(DAY_POLICY_WALK - DAY_POLICY_WALK.mean(), -0.028, 0.040)
 
 # Monthly fuel-index variation on per-km rate (±0.06 AED, as per RTA policy)
 FUEL_INDEX = np.array([
@@ -478,12 +491,32 @@ ph_final = np.maximum(ph_fare, min_fare)
 # Careem Plus 5% loyalty discount (private hire only)
 ph_final = np.where(is_careem_plus & ~is_hala_product, ph_final * 0.95, ph_final)
 
-final_price  = np.where(is_hala_product, hala_final, ph_final)
+hidden_policy_multiplier = np.clip(
+    1.0
+    + MONTH_POLICY_DRIFT[months - 1]
+    + PRODUCT_MONTH_POLICY_DRIFT[prod_idx, months - 1]
+    + ZONE_DAY_POLICY_DRIFT[day_of_year, pu_idx]
+    + DAY_POLICY_WALK[day_of_year],
+    0.88, 1.16,
+)
+
+final_price  = np.where(is_hala_product, hala_final, ph_final) * hidden_policy_multiplier
 metered_fare = np.where(is_hala_product, hala_fare,  ph_fare)
 surge_out    = np.where(is_hala_product, 1.0, surge_mult)
 
-# Realistic market noise (~2.5%) — the part a model should NOT be able to explain
-price_noise = np.random.normal(0, 0.025, N_RIDES)
+# Stronger irreducible market noise: volatility increases for peak, airport,
+# event-heavy, longer, and more congested rides.
+noise_scale = np.clip(
+    0.035
+    + 0.012 * is_peak.astype(float)
+    + 0.010 * np.clip(traffic_index - 1.0, 0.0, 1.2)
+    + 0.010 * np.clip(event_dmult - 1.0, 0.0, 1.5)
+    + 0.008 * is_airport.astype(float)
+    + 0.006 * (route_distance_km > 20).astype(float)
+    + 0.008 * is_hala_product.astype(float),
+    0.035, 0.095,
+)
+price_noise = np.random.normal(0, noise_scale, N_RIDES)
 final_price = np.round(np.maximum(final_price * (1 + price_noise), min_fare), 2)
 
 # ── 10. Outcomes ──────────────────────────────────────────────────────────────

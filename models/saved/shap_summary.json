@@ -1,82 +1,82 @@
 [
   {
     "feature": "distance_x_traffic",
-    "mean_abs_shap": 14.9023
-  },
-  {
-    "feature": "route_distance_km",
-    "mean_abs_shap": 14.669
+    "mean_abs_shap": 15.9101
   },
   {
     "feature": "is_hala_product",
-    "mean_abs_shap": 14.2583
+    "mean_abs_shap": 14.5041
+  },
+  {
+    "feature": "route_distance_km",
+    "mean_abs_shap": 14.2396
   },
   {
     "feature": "demand_index",
-    "mean_abs_shap": 4.9645
+    "mean_abs_shap": 4.8011
   },
   {
     "feature": "product_type_Premier",
-    "mean_abs_shap": 4.4809
+    "mean_abs_shap": 4.4969
   },
   {
     "feature": "product_type_MAX",
-    "mean_abs_shap": 4.0298
+    "mean_abs_shap": 4.0151
   },
   {
     "feature": "salik_gates",
-    "mean_abs_shap": 2.6057
+    "mean_abs_shap": 2.7267
   },
   {
     "feature": "product_type_Hala Taxi",
-    "mean_abs_shap": 2.2829
+    "mean_abs_shap": 2.2296
   },
   {
     "feature": "product_type_Executive",
-    "mean_abs_shap": 2.0715
+    "mean_abs_shap": 2.0559
   },
   {
     "feature": "product_type_Comfort",
-    "mean_abs_shap": 1.9702
+    "mean_abs_shap": 1.994
   },
   {
     "feature": "product_type_Hala MAX",
-    "mean_abs_shap": 1.6742
+    "mean_abs_shap": 1.673
   },
   {
     "feature": "route_direct_distance_km",
-    "mean_abs_shap": 1.326
+    "mean_abs_shap": 1.3498
   },
   {
     "feature": "pickup_density_score",
-    "mean_abs_shap": 0.8727
+    "mean_abs_shap": 1.0296
+  },
+  {
+    "feature": "month_sin",
+    "mean_abs_shap": 0.9113
   },
   {
     "feature": "product_type_Eco Friendly",
-    "mean_abs_shap": 0.7168
-  },
-  {
-    "feature": "traffic_index",
-    "mean_abs_shap": 0.6437
+    "mean_abs_shap": 0.6887
   },
   {
     "feature": "is_airport_ride",
-    "mean_abs_shap": 0.6312
+    "mean_abs_shap": 0.6458
+  },
+  {
+    "feature": "traffic_index",
+    "mean_abs_shap": 0.5918
   },
   {
     "feature": "is_careem_plus",
-    "mean_abs_shap": 0.4135
+    "mean_abs_shap": 0.3876
   },
   {
     "feature": "distance_gap_km",
-    "mean_abs_shap": 0.3826
+    "mean_abs_shap": 0.36
   },
   {
     "feature": "pickup_lon",
-    "mean_abs_shap": 0.2895
-  },
-  {
-    "feature": "temperature_c",
-    "mean_abs_shap": 0.2638
+    "mean_abs_shap": 0.2823
   }
 ]
