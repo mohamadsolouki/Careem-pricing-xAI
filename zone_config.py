@@ -334,10 +334,11 @@ def get_zone_for_point(lat: float, lon: float) -> str:
     Falls back to nearest zone centroid (Euclidean) otherwise.
     """
     _load_polygons()
-    pt = Point(lon, lat)   # Shapely uses (x=lon, y=lat)
-    for geom, zone in _polygons:
-        if geom.contains(pt):
-            return zone
+    if _SHAPELY and _polygons:
+        pt = Point(lon, lat)   # Shapely uses (x=lon, y=lat)
+        for geom, zone in _polygons:
+            if geom.contains(pt):
+                return zone
     # Fallback: nearest centroid
     best, best_d = "Downtown", float("inf")
     for zname, zmeta in ZONE_META.items():
