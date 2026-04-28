@@ -30,7 +30,7 @@ shap_summary = pd.DataFrame(shap_bundle["summary"])
 hero(
     "XPrice — Explainable Ride Pricing",
     "Research Artifact · Dubai 2025",
-    "A dual-audience pricing intelligence platform built on a 165k-ride Dubai mirror dataset. Combines a coordinate-first XGBoost fare model, tree contribution decomposition, OSRM route previews, and optional live traffic overlays — giving both riders and operations managers transparent, explainable fare insights.",
+    "A dual-audience pricing intelligence platform built on a 165k-ride Dubai mirror dataset. Combines a coordinate-first XGBoost fare model, polygon-resolved neighborhood labels, tree contribution decomposition, OSRM route previews, and optional live traffic overlays — giving both riders and operations managers transparent, explainable fare insights.",
 )
 
 with st.sidebar:
@@ -71,13 +71,13 @@ with left:
     )
     card(
         "What changed in the data",
-        "The dataset was regenerated and expanded to 68 columns. It now includes direct-route distance, route efficiency, bearing, pickup/dropoff density scores, and traffic index features — so the model behaves more like a real pricing engine tied to map coordinates.",
+        "The dataset was regenerated and expanded to 72 columns. It now carries polygon-resolved pickup/dropoff neighborhoods, location-source flags, direct-route distance, route efficiency, bearing, density scores, and traffic features — so the model stays aligned with the map-selected coordinates shown in the simulator.",
     )
 
     section_header("Top global drivers")
     st.dataframe(
         shap_summary.rename(columns={"feature": "Feature", "mean_abs_shap": "Mean |contribution| (AED)"}),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -85,7 +85,7 @@ with right:
     section_header("Contribution overview")
     figure_path = PROJECT_ROOT / "docs" / "figures" / "shap" / "shap_beeswarm.png"
     if figure_path.exists():
-        st.image(str(figure_path), use_container_width=True)
+        st.image(str(figure_path), width="stretch")
     else:
         st.info("Run `python models/xai_analysis.py` to regenerate the global contribution figures.")
 
@@ -114,7 +114,7 @@ with bottom_left:
         font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
         title_font={"size": 14, "color": "#0f172a"},
     )
-    st.plotly_chart(zone_chart, use_container_width=True)
+    st.plotly_chart(zone_chart, width="stretch")
 
 with bottom_right:
     section_header("Premium product mix")
@@ -139,6 +139,6 @@ with bottom_right:
         font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
         title_font={"size": 14, "color": "#0f172a"},
     )
-    st.plotly_chart(product_chart, use_container_width=True)
+    st.plotly_chart(product_chart, width="stretch")
 
 st.caption("Calendar overlays use the 2025 research season. Live weather is optional and only active when an OpenWeatherMap API key is configured and the selected date is today.")

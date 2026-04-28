@@ -4,6 +4,31 @@ import folium
 from branca.element import MacroElement, Template
 
 from utils.domain import DUBAI_CENTER, ZONE_NAMES, ZONES, get_location_context as domain_get_location_context, get_nearest_zone as domain_get_nearest_zone
+from zone_config import get_neighborhood_overlay_geojson
+
+
+_ZONE_COLORS = {
+    "Downtown": "#0f766e",
+    "Business Bay": "#0ea5e9",
+    "DIFC": "#2563eb",
+    "Bur Dubai": "#a16207",
+    "Deira": "#ca8a04",
+    "Jumeirah": "#14b8a6",
+    "Al Barsha": "#16a34a",
+    "Al Quoz": "#65a30d",
+    "Marina": "#06b6d4",
+    "Palm Jumeirah": "#0284c7",
+    "DXB Airport": "#dc2626",
+    "Al Nahda": "#d97706",
+    "Mirdif": "#9333ea",
+    "Silicon Oasis": "#7c3aed",
+    "Dubai Hills": "#0d9488",
+    "JVC": "#4f46e5",
+    "Jebel Ali": "#475569",
+    "Dubai South": "#0369a1",
+    "Ras Al Khor": "#7c2d12",
+    "Sharjah": "#b91c1c",
+}
 
 
 class _DraggableRouteBridge(MacroElement):
@@ -136,6 +161,26 @@ def _map_location_label(lat: float, lon: float) -> str:
     return f"{location['neighborhood']} / {location['zone']}"
 
 
+def _overlay_style(feature: dict) -> dict:
+    zone = feature.get("properties", {}).get("zone", "")
+    color = _ZONE_COLORS.get(zone, "#475569")
+    return {
+        "color": color,
+        "weight": 1.3,
+        "opacity": 0.55,
+        "fillColor": color,
+        "fillOpacity": 0.05,
+    }
+
+
+def _overlay_highlight(_feature: dict) -> dict:
+    return {
+        "weight": 2.4,
+        "opacity": 0.95,
+        "fillOpacity": 0.10,
+    }
+
+
 def build_picker_map(
     pickup_point: tuple[float, float] | None,
     dropoff_point: tuple[float, float] | None,
@@ -145,6 +190,22 @@ def build_picker_map(
 ):
     map_center = center or pickup_point or dropoff_point or DUBAI_CENTER
     map_object = folium.Map(location=map_center, zoom_start=zoom or 11, tiles="CartoDB positron", control_scale=True)
+
+    boundary_overlay = get_neighborhood_overlay_geojson()
+    if boundary_overlay.get("features"):
+        folium.GeoJson(
+            boundary_overlay,
+            name="Neighborhood boundaries",
+            style_function=_overlay_style,
+            highlight_function=_overlay_highlight,
+            tooltip=folium.GeoJsonTooltip(
+                fields=["neighborhood", "zone"],
+                aliases=["Neighborhood", "Pricing zone"],
+                localize=True,
+                sticky=False,
+                labels=True,
+            ),
+        ).add_to(map_object)
 
     for zone_name in ZONE_NAMES:
         zone = ZONES[zone_name]

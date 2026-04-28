@@ -26,6 +26,8 @@ FEATURE_PATH = os.path.join(SAVE_DIR, "feature_columns.pkl")
 SHAP_VALUES_PATH = os.path.join(SAVE_DIR, "shap_values.pkl")
 SHAP_SAMPLE_RAW_PATH = os.path.join(SAVE_DIR, "shap_sample_raw.pkl")
 SHAP_SAMPLE_FEATURES_PATH = os.path.join(SAVE_DIR, "shap_sample_features.pkl")
+SHAP_SAMPLE_RAW_CSV_PATH = os.path.join(SAVE_DIR, "shap_sample_raw.csv")
+SHAP_SAMPLE_FEATURES_CSV_PATH = os.path.join(SAVE_DIR, "shap_sample_features.csv")
 SHAP_SUMMARY_PATH = os.path.join(SAVE_DIR, "shap_summary.json")
 
 os.makedirs(FIG_DIR, exist_ok=True)
@@ -170,6 +172,8 @@ with open(SHAP_SAMPLE_RAW_PATH, "wb") as sample_raw_file:
     pickle.dump(sample_raw, sample_raw_file)
 with open(SHAP_SAMPLE_FEATURES_PATH, "wb") as sample_features_file:
     pickle.dump(X_sample, sample_features_file)
+sample_raw.to_csv(SHAP_SAMPLE_RAW_CSV_PATH, index=False)
+X_sample.to_csv(SHAP_SAMPLE_FEATURES_CSV_PATH, index=False)
 
 mean_abs_shap = np.abs(contrib_values).mean(axis=0)
 top_indices = np.argsort(mean_abs_shap)[::-1][:TOP_FEATURES]
@@ -200,4 +204,6 @@ print("✓ SHAP analysis complete.")
 print(f"  Saved → {SHAP_VALUES_PATH}")
 print(f"  Saved → {SHAP_SAMPLE_RAW_PATH}")
 print(f"  Saved → {SHAP_SAMPLE_FEATURES_PATH}")
+print(f"  Saved → {SHAP_SAMPLE_RAW_CSV_PATH}")
+print(f"  Saved → {SHAP_SAMPLE_FEATURES_CSV_PATH}")
 print(f"  Saved → {SHAP_SUMMARY_PATH}")

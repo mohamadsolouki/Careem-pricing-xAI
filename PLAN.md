@@ -26,13 +26,15 @@ We construct a synthetic mirror dataset modeled on Dubai's real ride-hailing ope
 ---
 
 ### PHASE 1 — Dataset Construction
-**Goal:** Build a rich, realistic Dubai ride-hailing dataset (165,000 records, 68 columns) centered on exact pickup and dropoff coordinates rather than only neighborhood labels.
+**Goal:** Build a rich, realistic Dubai ride-hailing dataset (165,000 records, 72 columns) centered on exact pickup and dropoff coordinates with neighborhood-aware polygon lookup instead of centroid-only labels.
 
 #### 1.1 Define Feature Set
 
 **Spatial features (Dubai geography):**
 - `pickup_lat` / `pickup_lon` / `dropoff_lat` / `dropoff_lon` — realistic coordinates per zone, jittered to simulate exact rider endpoints
-- `pickup_zone` / `dropoff_zone` — derived metadata labels for the nearest research zone centroid
+- `pickup_neighborhood` / `dropoff_neighborhood` — community labels resolved from the official Dubai GeoJSON polygons
+- `pickup_zone` / `dropoff_zone` — pricing-zone labels derived from the polygon-matched neighborhood, with centroid fallback only outside mapped polygons
+- `pickup_location_source` / `dropoff_location_source` — indicates whether each endpoint came from polygon lookup or centroid fallback
 - `route_direct_distance_km` — direct great-circle distance between the two endpoints
 - `route_distance_km` — routed trip distance with OSRM-style geometry or a deterministic fallback
 - `route_efficiency_ratio` — routed distance divided by direct distance
@@ -43,17 +45,17 @@ We construct a synthetic mirror dataset modeled on Dubai's real ride-hailing ope
 **Temporal features:**
 - `timestamp` — full datetime across Jan–Dec 2025
 - `hour` — 0–23
-- `day_of_week` — 0–6 (Fri/Sat = UAE weekend)
-- `is_weekend` — binary (Fri/Sat in UAE)
+- `day_of_week` — 0–6 (Mon=0, Sun=6)
+- `is_weekend` — binary (Sat/Sun in the UAE post-2022 work week)
 - `month` — 1–12
 - `is_ramadan` — binary (Ramadan 2025: 1–29 March)
 - `is_uae_public_holiday` — New Year, Eid Al Fitr, Eid Al Adha, UAE National Day (2–3 Dec), Islamic New Year, Prophet's Birthday
-- `is_peak_hour` — 07:00–09:00 and 17:00–20:00
-- `is_late_night` — 00:00–04:00
+- `is_peak_hour` — 08:00–09:59 and 16:00–19:59
+- `is_late_night` — 22:00–05:59
 
 **Event features (Dubai 2025):**
 - `active_event` — None / DSF (Dubai Shopping Festival, Jan–Feb) / GITEX (Oct) / Dubai Airshow (Nov) / NYE Burj / Eid / F1 Weekend / Concert / Sports
-- `event_proximity_km` — distance of pickup to nearest active event venue
+- `event_type` — event category label used by the app and model (shopping festival, trade show, sports event, etc.)
 - `event_demand_multiplier` — estimated demand boost (1.0–2.5x)
 
 **Weather features (Dubai-specific):**
@@ -64,7 +66,7 @@ We construct a synthetic mirror dataset modeled on Dubai's real ride-hailing ope
 - `weather_demand_factor` — composite weather impact on demand
 
 **Supply features:**
-- `product_type` — Comfort / Executive / Premier / MAX / Kids / Electric / Hala Taxi / Hala Max
+- `product_type` — Comfort / Executive / Hala Taxi / Eco Friendly / Electric / Kids / Hala Kids / Premier / MAX / Hala MAX
 - `payment_method` — Credit Card / Cash / Careem Pay / Careem Plus
 - `demand_index` — composite demand score combining density, weather, events, and time windows
 - `captain_availability_score` — bounded supply proxy from 0.15 to 1.00
@@ -79,8 +81,8 @@ We construct a synthetic mirror dataset modeled on Dubai's real ride-hailing ope
 - `price_per_km_aed` — derived final fare per routed kilometer
 
 **Outcome features:**
-- `booking_status` — Completed / Captain Cancelled / Customer Cancelled / No Captain
-- `wait_time_minutes` — VTAT
+- `booking_status` — Completed / Cancelled
+- `wait_time_min` — VTAT proxy
 - `captain_rating` / `customer_rating`
 
 #### 1.2 Pricing Formula
@@ -91,7 +93,7 @@ demand_supply_gap = (ride_requests_zone_hour / avg_requests_zone_hour) - (captai
 ```
 
 #### 1.3 Deliverable
-- File: `data/processed/dubai_rides_2025.csv` (165k rows, 68 columns)
+- File: `data/processed/dubai_rides_2025.csv` (165k rows, 72 columns)
 - Script: `data/generate_dataset.py`
 - Documentation: `data/DATA_DICTIONARY.md`
 
@@ -186,8 +188,8 @@ app/
 ```
 
 #### Page 1 — Ride Simulator (End-User View)
-- **Map interface** (Folium embedded in Streamlit) — user clicks to set exact pickup and dropoff points in Dubai
-- Derived zone labels auto-detected from coordinates for explanation and dashboard filtering
+- **Map interface** (Folium embedded in Streamlit) — user drags pickup and dropoff pins directly on the Dubai map, with neighborhood boundaries visible from the official GeoJSON overlay
+- Derived neighborhood and pricing-zone labels auto-detected from coordinates for explanation and dashboard filtering
 - Route distance and geometry pulled from OSRM when available, with a deterministic fallback model
 - **Real-time weather** pulled from OpenWeatherMap API for current-day requests when configured
 - **Live traffic** optionally pulled from TomTom Flow for current-day requests when configured
@@ -196,7 +198,7 @@ app/
 - **Price estimate** generated by ML model
 - **SHAP waterfall** showing exactly what drives the price
 - **Natural language breakdown:** "Your fare is AED 31.50. The biggest factors are route distance, current event demand, and traffic conditions. Weather is clear so no weather surcharge applies."
-- Product selector: Comfort / Executive / Premier / MAX / Kids / Electric / Hala Taxi / Hala Max
+- Product selector: Comfort / Executive / Hala Taxi / Eco Friendly / Electric / Kids / Hala Kids / Premier / MAX / Hala MAX
 
 #### Page 2 — Operations XAI Dashboard (Internal View)
 - Global SHAP beeswarm and bar chart

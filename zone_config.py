@@ -10,6 +10,7 @@ Exported symbols used by both dataset generator and the Streamlit app:
     ZONE_META       – dict[zone_name -> {tier, dmult, lat, lon}]
     SALIK           – dict[(zone_a, zone_b) -> int]  gate count
     get_location_context(lat, lon) -> dict[str, str]
+    get_neighborhood_overlay_geojson() -> dict
     get_neighborhood_for_point(lat, lon) -> str
     get_zone_for_point(lat, lon) -> str
     get_salik(pu_zone, do_zone) -> int
@@ -20,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import math
+from copy import deepcopy
 from functools import lru_cache
 
 try:
@@ -318,16 +320,21 @@ _GEOJSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data",
 
 _polygons: list[tuple] = []   # [(prepared_geom, neighborhood_name, zone_name), ...]
 
+
+@lru_cache(maxsize=1)
+def _load_geojson() -> dict:
+    if not os.path.exists(_GEOJSON_PATH):
+        return {"type": "FeatureCollection", "features": []}
+    with open(_GEOJSON_PATH, encoding="utf-8") as fh:
+        return json.load(fh)
+
 def _load_polygons() -> None:
     global _polygons
     if _polygons:
         return
     if not _SHAPELY:
         return
-    if not os.path.exists(_GEOJSON_PATH):
-        return
-    with open(_GEOJSON_PATH, encoding="utf-8") as fh:
-        gj = json.load(fh)
+    gj = _load_geojson()
     for feat in gj["features"]:
         name = _normalize_neighborhood_name(feat["properties"].get("name", ""))
         zone = NEIGHBORHOOD_TO_ZONE.get(name)
@@ -348,6 +355,25 @@ def _nearest_zone_for_point(lat: float, lon: float) -> str:
             best_d = d
             best = zname
     return best
+
+
+@lru_cache(maxsize=1)
+def get_neighborhood_overlay_geojson() -> dict:
+    """Return mapped neighborhood boundaries with pricing-zone metadata."""
+    features = []
+    for feature in _load_geojson().get("features", []):
+        neighborhood = _normalize_neighborhood_name(feature.get("properties", {}).get("name", ""))
+        zone = NEIGHBORHOOD_TO_ZONE.get(neighborhood)
+        if zone is None:
+            continue
+        copied_feature = deepcopy(feature)
+        copied_feature["properties"] = {
+            **copied_feature.get("properties", {}),
+            "neighborhood": _display_neighborhood_name(neighborhood),
+            "zone": zone,
+        }
+        features.append(copied_feature)
+    return {"type": "FeatureCollection", "features": features}
 
 
 def get_location_context(lat: float, lon: float) -> dict[str, str]:

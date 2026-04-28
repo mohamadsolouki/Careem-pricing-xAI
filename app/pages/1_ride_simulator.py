@@ -224,7 +224,7 @@ with st.container(border=True):
     with builder_col_5:
         use_live_weather = st.toggle("Use live weather", value=True)
         use_live_traffic = st.toggle("Use live traffic", value=True)
-        if st.button("Reset route", use_container_width=True):
+        if st.button("Reset route", width="stretch"):
             st.session_state["pickup_point"] = DEFAULT_PICKUP_POINT
             st.session_state["dropoff_point"] = DEFAULT_DROPOFF_POINT
             st.session_state["map_center"] = None
@@ -288,11 +288,11 @@ with top_left:
     with st.container(border=True):
         st.markdown("#### Route editor")
         st.markdown(
-            '<div class="ride-dash-caption">Drag the pickup and dropoff chips directly on the map. Panning still works normally, but pin drags now update the route in place.</div>',
+            '<div class="ride-dash-caption">Drag the pickup and dropoff chips directly on the map. Panning still works normally, pin drags update the route in place, and the neighborhood boundary overlay helps you see the pricing-area context before you quote.</div>',
             unsafe_allow_html=True,
         )
         st.markdown(
-            '<div class="ride-inline-note"><span>Drag pins to reposition</span><span>Pan and zoom freely</span><span>Manual lat/lon edit is still available below</span></div>',
+            '<div class="ride-inline-note"><span>Drag pins to reposition</span><span>Hover boundaries for neighborhood + zone</span><span>Manual lat/lon edit is still available below</span></div>',
             unsafe_allow_html=True,
         )
         map_payload = st_folium(
@@ -421,10 +421,10 @@ bottom_left, bottom_right = st.columns([1.14, 0.86], gap="medium")
 with bottom_left:
     with st.container(border=True):
         section_header("Local contribution waterfall")
-        st.pyplot(plot_waterfall(contribution_series, base_value, predicted_price), use_container_width=True)
+        st.pyplot(plot_waterfall(contribution_series, base_value, predicted_price), width="stretch")
 
 with bottom_right:
     with st.container(border=True):
         section_header("Top local drivers")
-        st.dataframe(explanation["summary_table"].head(8), use_container_width=True, hide_index=True)
+        st.dataframe(explanation["summary_table"].head(8), width="stretch", hide_index=True)
         st.caption("The pricing engine and the model are intentionally close because the synthetic mirror dataset is generated from explicit pricing logic and then learned back by the model. The difference is that the quote is now anchored to map-selected coordinates and route context.")

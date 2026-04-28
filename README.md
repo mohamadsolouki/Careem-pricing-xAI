@@ -6,34 +6,36 @@ XPrice is a research-oriented Streamlit application and analytics pipeline for e
 
 | Metric | Value |
 |--------|-------|
-| Test R² | **0.9885** |
-| Test RMSE | **AED 5.45** |
-| Test MAE | **AED 3.17** |
-| CV R² (5-fold block) | **0.9882 ± 0.0002** |
-| 90% prediction interval | **± AED 7.12** (conformal, exact 90% coverage) |
+| Test R² | **0.9880** |
+| Test RMSE | **AED 5.56** |
+| Test MAE | **AED 3.23** |
+| CV R² (5-fold block) | **0.9878 ± 0.0003** |
+| 90% prediction interval | **± AED 7.28** (conformal, exact 90% coverage) |
 | Training rows | 119,970 |
 | Features | 76 |
 | SHAP explanation pool | 5,000 rides |
 
 ## What Is In The Repo
 
-- A synthetic 165,000-row Dubai ride-hailing dataset with 68 columns.
+- A synthetic 165,000-row Dubai ride-hailing dataset with 72 columns, including polygon-resolved pickup and dropoff neighborhood metadata.
 - A coordinate-first pricing model that learns from route geometry, density, weather, demand, and traffic signals.
 - XAI artefacts built with XGBoost native tree contribution outputs (no shap library dependency).
-- Conformal prediction intervals (±AED 7.12 for 90% coverage) displayed on every fare quote.
+- Conformal prediction intervals (±AED 7.28 for 90% coverage) displayed on every fare quote.
 - A Streamlit app with three pages:
-  - **Rider Simulator**: map-based pickup/dropoff with fare quote, 90% prediction interval, and waterfall explanation.
+  - **Rider Simulator**: draggable pickup/dropoff pins, official neighborhood boundary overlay, polygon-resolved area labels, fare quote, 90% prediction interval, and waterfall explanation.
   - **Operations Dashboard**: filtered global contribution analysis with zone heatmaps, hourly patterns, event breakdowns, and a residuals tab for model quality audit.
   - **Feature Explorer**: PDP + ICE curves, SHAP dependence plots, what-if lab with manual overrides, and a **LIME vs SHAP** method comparison panel.
 
 ## Project Structure
 
 ```text
+zone_config.py
 app/
   app.py
   pages/
   utils/
 data/
+  dubai_neighborhoods.geojson
   generate_dataset.py
   data/
   processed/
@@ -43,7 +45,6 @@ models/
   xai_analysis.py
   saved/
 docs/
-notebooks/
 paper/
 ```
 
@@ -134,6 +135,7 @@ Live weather and live traffic are only used for rides scheduled for the current 
 - `models/feature_engineering.py`: Shared training and inference feature logic.
 - `models/train_model.py`: Trains and saves the XGBoost fare model.
 - `models/xai_analysis.py`: Builds the saved contribution artefacts and figures.
+- `zone_config.py`: Shared pricing-zone metadata plus neighborhood polygon lookup/overlay data.
 - `app/app.py`: Streamlit landing page.
 - `app/pages/1_ride_simulator.py`: Rider-facing quote simulator.
 - `app/pages/2_operations_xai.py`: Operations contribution dashboard.
@@ -144,6 +146,7 @@ Live weather and live traffic are only used for rides scheduled for the current 
 - The repo uses XGBoost native `pred_contribs=True` for explanation export.
 - The app is designed to work without external API keys.
 - Route context uses OSRM when available and a deterministic fallback when not.
+- Neighborhood labels and map boundaries come from the shared Dubai GeoJSON in `zone_config.py`, with Shapely-backed point-in-polygon lookup and centroid fallback outside mapped polygons.
 
 ## Current Outputs
 

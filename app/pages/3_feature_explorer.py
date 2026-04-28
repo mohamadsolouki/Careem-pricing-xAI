@@ -110,7 +110,7 @@ selected_feature = st.selectbox("Select a continuous feature", continuous_featur
 left, right = st.columns([1.1, 0.9], gap="large")
 with left:
     section_header("Dependence view")
-    st.pyplot(plot_dependence(contrib_values, sample_features, selected_feature), use_container_width=True)
+    st.pyplot(plot_dependence(contrib_values, sample_features, selected_feature), width="stretch")
 
 with right:
     section_header("Partial dependence + ICE curves")
@@ -172,7 +172,7 @@ with right:
         yaxis={"gridcolor": "#f1f5f9", "title": {"text": "Predicted fare (AED)", "font": {"color": "#64748b"}}},
         legend={"font": {"size": 11, "color": "#64748b"}},
     )
-    st.plotly_chart(sweep_fig, use_container_width=True)
+    st.plotly_chart(sweep_fig, width="stretch")
     st.caption("Gray lines are Individual Conditional Expectation (ICE) curves for 15 random rides. Teal line is the population mean (PDP).")
 
 st.divider()
@@ -193,7 +193,7 @@ with lime_left:
     section_header("SHAP (tree contribution decomposition)")
     _single_frame = sample_features.iloc[[_lime_ride_idx]]
     _l_contrib, _l_base, _l_pred = compute_local_contributions(model, _single_frame)
-    st.pyplot(plot_waterfall(_l_contrib, _l_base, _l_pred), use_container_width=True)
+    st.pyplot(plot_waterfall(_l_contrib, _l_base, _l_pred), width="stretch")
     st.caption(f"Predicted: AED {_l_pred:.2f}  \u00b7  Base: AED {_l_base:.2f}")
 
 with lime_right:
@@ -224,7 +224,7 @@ with lime_right:
                 yaxis={"gridcolor": "#f1f5f9"},
                 coloraxis_showscale=False,
             )
-            st.plotly_chart(_lime_bar, use_container_width=True)
+            st.plotly_chart(_lime_bar, width="stretch")
             st.caption(
                 "LIME weights are estimates from a local linear model fitted on perturbed samples around this ride. "
                 "Values approximate contribution magnitude but may differ from SHAP due to the linear surrogate assumption."
@@ -327,7 +327,7 @@ with lab_left:
     metric_row[1].metric("Traffic source", scenario_record.get("traffic_source", "Synthetic"))
     metric_row[2].metric("Traffic condition", scenario_record.get("traffic_condition", "Moderate"))
     section_header("Contribution waterfall")
-    st.pyplot(plot_waterfall(contribution_series, base_value, predicted_price), use_container_width=True)
+    st.pyplot(plot_waterfall(contribution_series, base_value, predicted_price), width="stretch")
 
 with lab_right:
     section_header("Scenario explanation")
@@ -338,4 +338,4 @@ with lab_right:
     for sentence in explanation["sentences"]:
         st.write(sentence)
     section_header("Driver breakdown")
-    st.dataframe(explanation["summary_table"].head(8), use_container_width=True, hide_index=True)
+    st.dataframe(explanation["summary_table"].head(8), width="stretch", hide_index=True)

@@ -1,10 +1,10 @@
 {
-  "training_date": "2026-04-27T06:43:12",
+  "training_date": "2026-04-28T12:53:24",
   "dataset_path": "C:\\Users\\moham\\OneDrive\\Desktop\\CUD\\4th\\Data analytics for managers\\final\\Data final proj\\data\\processed\\dubai_rides_2025.csv",
-  "dataset_hash_md5_first1MB": "8e3f56c8c7f2606e4e5f0064bf0341b4",
-  "git_commit": "0517ceb",
+  "dataset_hash_md5_first1MB": "a5ff849f89186705aa381f95619b2bdd",
+  "git_commit": "e930ba2",
   "n_rows_total": 149963,
   "n_features": 76,
-  "test_r2": 0.9885,
-  "cv_r2_mean": 0.9882
+  "test_r2": 0.988,
+  "cv_r2_mean": 0.9878
 }

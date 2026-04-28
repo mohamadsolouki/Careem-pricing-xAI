@@ -11,6 +11,18 @@ import streamlit as st
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = PROJECT_ROOT / "models" / "saved"
 DATA_PATH = PROJECT_ROOT / "data" / "processed" / "dubai_rides_2025.csv"
+SHAP_SAMPLE_RAW_CSV_PATH = MODELS_DIR / "shap_sample_raw.csv"
+SHAP_SAMPLE_FEATURES_CSV_PATH = MODELS_DIR / "shap_sample_features.csv"
+SHAP_SAMPLE_RAW_PICKLE_PATH = MODELS_DIR / "shap_sample_raw.pkl"
+SHAP_SAMPLE_FEATURES_PICKLE_PATH = MODELS_DIR / "shap_sample_features.pkl"
+
+
+def _load_shap_frame(csv_path: Path, pickle_path: Path) -> pd.DataFrame:
+    # CSV keeps the SHAP sample frames portable across different pandas builds.
+    if csv_path.exists():
+        return pd.read_csv(csv_path)
+    with open(pickle_path, "rb") as frame_file:
+        return pickle.load(frame_file)
 
 
 @st.cache_resource(show_spinner=False)
@@ -35,10 +47,8 @@ def load_metrics():
 def load_shap_bundle():
     with open(MODELS_DIR / "shap_values.pkl", "rb") as shap_file:
         shap_values = pickle.load(shap_file)
-    with open(MODELS_DIR / "shap_sample_raw.pkl", "rb") as sample_raw_file:
-        sample_raw = pickle.load(sample_raw_file)
-    with open(MODELS_DIR / "shap_sample_features.pkl", "rb") as sample_feature_file:
-        sample_features = pickle.load(sample_feature_file)
+    sample_raw = _load_shap_frame(SHAP_SAMPLE_RAW_CSV_PATH, SHAP_SAMPLE_RAW_PICKLE_PATH)
+    sample_features = _load_shap_frame(SHAP_SAMPLE_FEATURES_CSV_PATH, SHAP_SAMPLE_FEATURES_PICKLE_PATH)
     with open(MODELS_DIR / "shap_summary.json", "r", encoding="utf-8") as summary_file:
         shap_summary = json.load(summary_file)
     return {

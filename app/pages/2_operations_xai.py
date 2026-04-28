@@ -96,12 +96,12 @@ with tab_global:
     left, right = st.columns(2, gap="large")
     with left:
         section_header("Feature impact distribution")
-        st.pyplot(plot_beeswarm(filtered_values, filtered_features, max_display=18), use_container_width=True)
+        st.pyplot(plot_beeswarm(filtered_values, filtered_features, max_display=18), width="stretch")
     with right:
         section_header("Mean absolute contribution")
-        st.pyplot(plot_importance_bar(filtered_values, list(filtered_features.columns), max_display=18), use_container_width=True)
+        st.pyplot(plot_importance_bar(filtered_values, list(filtered_features.columns), max_display=18), width="stretch")
     section_header("Top drivers summary")
-    st.dataframe(top_driver_frame, use_container_width=True, hide_index=True)
+    st.dataframe(top_driver_frame, width="stretch", hide_index=True)
 
 with tab_zone:
     zone_summary = (
@@ -128,7 +128,7 @@ with tab_zone:
             plot_bgcolor="rgba(0,0,0,0)",
             font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
     heat_features = top_driver_frame["feature"].head(6).tolist()
@@ -155,7 +155,7 @@ with tab_zone:
             paper_bgcolor="rgba(0,0,0,0)",
             font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
 with tab_time:
@@ -177,11 +177,11 @@ with tab_time:
             paper_bgcolor="rgba(0,0,0,0)",
             font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
         ),
-        use_container_width=True,
+        width="stretch",
     )
     section_header("Dependence plot")
     selected_feature = st.selectbox("Inspect one time-sensitive feature", time_features)
-    st.pyplot(plot_dependence(filtered_values, filtered_features, selected_feature), use_container_width=True)
+    st.pyplot(plot_dependence(filtered_values, filtered_features, selected_feature), width="stretch")
 
 with tab_event:
     event_frame = filtered_raw.copy()
@@ -205,7 +205,7 @@ with tab_event:
             plot_bgcolor="rgba(0,0,0,0)",
             font={"color": "#0f172a", "family": "Inter, Segoe UI, sans-serif"},
         ),
-        use_container_width=True,
+        width="stretch",
     )
     event_stats = (
         event_subset.groupby("event_group")
@@ -214,7 +214,7 @@ with tab_event:
         .sort_values("avg_fare", ascending=False)
     )
     section_header("Event statistics table")
-    st.dataframe(event_stats, use_container_width=True, hide_index=True)
+    st.dataframe(event_stats, width="stretch", hide_index=True)
 
     # SHAP contribution breakdown by event — which drivers change most across events?
     section_header("Feature contributions by event context")
@@ -256,7 +256,7 @@ with tab_event:
             yaxis={"title": "Mean contribution (AED)", "gridcolor": "#f1f5f9"},
             legend={"title": "Feature", "font": {"size": 11}},
         )
-        st.plotly_chart(event_contrib_chart, use_container_width=True)
+        st.plotly_chart(event_contrib_chart, width="stretch")
         st.caption(
             "Each group of bars shows the mean tree contribution of the top 5 global features for rides occurring "
             "during that event. Differences across events reveal which features are event-sensitive vs stable."
@@ -293,7 +293,7 @@ with tab_residuals:
     )
     res_hist.add_vline(x=0, line_dash="dash", line_color="#dc2626", line_width=1.5)
     res_hist.update_layout(height=300, xaxis_title="Residual (AED)", yaxis_title="Count", **_chart_layout)
-    st.plotly_chart(res_hist, use_container_width=True)
+    st.plotly_chart(res_hist, width="stretch")
     st.caption("Residuals centred near zero with thin tails indicate the model is well-calibrated. Skew or heavy tails would flag systematic bias.")
 
     res_left, res_right = st.columns(2, gap="large")
@@ -318,7 +318,7 @@ with tab_residuals:
             yaxis={"title": "Residual (AED)", "gridcolor": "#f1f5f9"},
             **_chart_layout,
         )
-        st.plotly_chart(res_zone_box, use_container_width=True)
+        st.plotly_chart(res_zone_box, width="stretch")
 
     with res_right:
         section_header("Mean residual by hour")
@@ -343,7 +343,7 @@ with tab_residuals:
             coloraxis_showscale=False,
             **_chart_layout,
         )
-        st.plotly_chart(res_hour_bar, use_container_width=True)
+        st.plotly_chart(res_hour_bar, width="stretch")
 
     st.caption(
         "Residuals are computed on the 5,000-ride SHAP sample using the trained XGBoost model. "
