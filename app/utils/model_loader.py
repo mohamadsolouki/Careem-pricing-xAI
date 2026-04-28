@@ -17,6 +17,17 @@ SHAP_SAMPLE_RAW_PICKLE_PATH = MODELS_DIR / "shap_sample_raw.pkl"
 SHAP_SAMPLE_FEATURES_PICKLE_PATH = MODELS_DIR / "shap_sample_features.pkl"
 
 
+def _path_cache_token(path: Path) -> tuple[int, int]:
+    if not path.exists():
+        return (0, 0)
+    stat = path.stat()
+    return (stat.st_mtime_ns, stat.st_size)
+
+
+def _paths_cache_token(*paths: Path) -> tuple[tuple[int, int], ...]:
+    return tuple(_path_cache_token(path) for path in paths)
+
+
 def _load_shap_frame(csv_path: Path, pickle_path: Path) -> pd.DataFrame:
     # CSV keeps the SHAP sample frames portable across different pandas builds.
     if csv_path.exists():
@@ -26,21 +37,33 @@ def _load_shap_frame(csv_path: Path, pickle_path: Path) -> pd.DataFrame:
 
 
 @st.cache_resource(show_spinner=False)
-def load_model():
+def _load_model_cached(_token: tuple[int, int]):
     with open(MODELS_DIR / "xgboost_price_model.pkl", "rb") as model_file:
         return pickle.load(model_file)
 
 
+def load_model():
+    return _load_model_cached(_path_cache_token(MODELS_DIR / "xgboost_price_model.pkl"))
+
+
 @st.cache_data(show_spinner=False)
-def load_feature_columns():
+def _load_feature_columns_cached(_token: tuple[int, int]):
     with open(MODELS_DIR / "feature_columns.pkl", "rb") as feature_file:
         return pickle.load(feature_file)
 
 
+def load_feature_columns():
+    return _load_feature_columns_cached(_path_cache_token(MODELS_DIR / "feature_columns.pkl"))
+
+
 @st.cache_data(show_spinner=False)
-def load_metrics():
+def _load_metrics_cached(_token: tuple[int, int]):
     with open(MODELS_DIR / "model_metrics.json", "r", encoding="utf-8") as metrics_file:
         return json.load(metrics_file)
+
+
+def load_metrics():
+    return _load_metrics_cached(_path_cache_token(MODELS_DIR / "model_metrics.json"))
 
 
 def get_interval_basis_percent(metrics: dict | None = None) -> int:
@@ -116,7 +139,7 @@ def estimate_trip_interval(record: dict[str, object], metrics: dict | None = Non
 
 
 @st.cache_data(show_spinner=False)
-def load_shap_bundle():
+def _load_shap_bundle_cached(_token: tuple[tuple[int, int], ...]):
     with open(MODELS_DIR / "shap_values.pkl", "rb") as shap_file:
         shap_values = pickle.load(shap_file)
     sample_raw = _load_shap_frame(SHAP_SAMPLE_RAW_CSV_PATH, SHAP_SAMPLE_RAW_PICKLE_PATH)
@@ -134,8 +157,21 @@ def load_shap_bundle():
     }
 
 
+def load_shap_bundle():
+    return _load_shap_bundle_cached(
+        _paths_cache_token(
+            MODELS_DIR / "shap_values.pkl",
+            MODELS_DIR / "shap_summary.json",
+            SHAP_SAMPLE_RAW_CSV_PATH,
+            SHAP_SAMPLE_RAW_PICKLE_PATH,
+            SHAP_SAMPLE_FEATURES_CSV_PATH,
+            SHAP_SAMPLE_FEATURES_PICKLE_PATH,
+        )
+    )
+
+
 @st.cache_data(show_spinner=False)
-def load_dataset_profile():
+def _load_dataset_profile_cached(_token: tuple[int, int]):
     usecols = [
         "final_price_aed",
         "booking_status",
@@ -159,11 +195,19 @@ def load_dataset_profile():
     }
 
 
+def load_dataset_profile():
+    return _load_dataset_profile_cached(_path_cache_token(DATA_PATH))
+
+
 @st.cache_data(show_spinner=False)
-def load_model_version() -> dict:
+def _load_model_version_cached(_token: tuple[int, int]) -> dict:
     """Load model versioning metadata written by train_model.py."""
     version_path = MODELS_DIR / "model_version.json"
     if not version_path.exists():
         return {}
     with open(version_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_model_version() -> dict:
+    return _load_model_version_cached(_path_cache_token(MODELS_DIR / "model_version.json"))
