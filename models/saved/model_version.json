@@ -1,8 +1,13 @@
 {
-  "training_date": "2026-04-28T18:35:12",
+  "training_date": "2026-04-28T19:00:14",
   "dataset_path": "C:\\Users\\moham\\OneDrive\\Desktop\\CUD\\4th\\Data analytics for managers\\final\\Data final proj\\data\\processed\\dubai_rides_2025.csv",
   "dataset_hash_md5_first1MB": "9b2a506149d2d8fecf36ea30ca1cc2ac",
-  "git_commit": "bf15ce6",
+  "git_commit": "92d74eb",
+  "git_branch": "main",
+  "git_worktree_dirty": true,
+  "git_dirty_paths": [
+    "models/train_model.py"
+  ],
   "n_rows_total": 149963,
   "n_train": 94596,
   "n_validation": 25109,

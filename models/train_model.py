@@ -330,14 +330,28 @@ try:
     _git_commit = subprocess.check_output(
         ["git", "rev-parse", "--short", "HEAD"], cwd=BASE_DIR, stderr=subprocess.DEVNULL,
     ).decode().strip()
+    _git_branch = subprocess.check_output(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=BASE_DIR, stderr=subprocess.DEVNULL,
+    ).decode().strip()
+    _git_status_lines = subprocess.check_output(
+        ["git", "status", "--short", "--untracked-files=no"], cwd=BASE_DIR, stderr=subprocess.DEVNULL,
+    ).decode().splitlines()
+    _git_worktree_dirty = bool(_git_status_lines)
+    _git_dirty_paths = [line[3:] for line in _git_status_lines if len(line) > 3]
 except Exception:
     _git_commit = "unknown"
+    _git_branch = "unknown"
+    _git_worktree_dirty = None
+    _git_dirty_paths = []
 
 _version_meta = {
     "training_date":  _dt.datetime.now().isoformat(timespec="seconds"),
     "dataset_path":   DATA_PATH,
     "dataset_hash_md5_first1MB": _dataset_hash,
     "git_commit":     _git_commit,
+    "git_branch":     _git_branch,
+    "git_worktree_dirty": _git_worktree_dirty,
+    "git_dirty_paths": _git_dirty_paths,
     "n_rows_total":   len(df),
     "n_train":        int(len(X_train)),
     "n_validation":   int(len(X_val)),
