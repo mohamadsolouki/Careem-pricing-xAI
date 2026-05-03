@@ -402,20 +402,6 @@ with top_right:
             f"Location source: pickup {record['pickup_location_source']} lookup, dropoff {record['dropoff_location_source']} lookup. Traffic falls back to a synthetic model when no live provider is configured for the selected ride window."
         )
 
-    with st.container(border=True):
-        section_header("Model status")
-        model_metrics = st.columns(3)
-        model_metrics[0].metric("Test R²", f"{metrics['test']['r2']:.4f}")
-        model_metrics[1].metric("RMSE", f"AED {metrics['test']['rmse']:.2f}")
-        model_metrics[2].metric(f"{_interval_basis_percent}% PI", f"±AED {_interval_half_width:.2f}")
-        st.caption(f"CV R² {metrics['cv']['r2_mean']:.4f} ± {metrics['cv']['r2_std']:.4f}")
-        st.caption(
-            f"Quote card uses adaptive {_interval_basis_percent}% trip bands. This ride is in the {quote_interval['label']} bucket at ±AED {quote_interval['half_width']:.2f}; "
-            f"the global baseline remains ±AED {_interval_half_width:.2f}."
-        )
-        if version_sim.get("training_date"):
-            st.caption(f"Trained {version_sim['training_date'][:10]}")
-
 bottom_left, bottom_right = st.columns([1.14, 0.86], gap="medium")
 with bottom_left:
     with st.container(border=True):
