@@ -25,7 +25,6 @@ from utils.ui import apply_theme, card, fare_result, hero, section_header
 from utils.weather_api import get_weather
 
 
-st.set_page_config(page_title="XPrice Rider Simulator", layout="wide")
 apply_theme()
 
 

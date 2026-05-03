@@ -34,7 +34,6 @@ except ImportError:
     _LIME_AVAILABLE = False
 
 
-st.set_page_config(page_title="XPrice Feature Explorer", layout="wide")
 apply_theme()
 
 # Load all resources first so they are available for the sidebar and page
@@ -63,21 +62,24 @@ def _get_lime_explainer():
 
 
 @st.cache_data(show_spinner=False)
-def _run_lime_explanation(ride_idx: int, _feature_columns_key: str) -> list:
-    """Return LIME local weights for a single ride. Cached by ride index."""
+def _run_lime_explanation(ride_idx: int, _feature_columns_key: str) -> dict:
+    """Return LIME weights + surrogate prediction for a single ride. Cached by ride index."""
     _explainer = _get_lime_explainer()
     if _explainer is None:
-        return []
+        return {"weights": [], "local_pred": None, "model_pred": None}
 
     def _predict_fn(arr):
         return model.predict(pd.DataFrame(arr, columns=feature_columns))
 
+    _row = sample_features.iloc[ride_idx].values
     _exp = _explainer.explain_instance(
-        sample_features.iloc[ride_idx].values,
+        _row,
         _predict_fn,
         num_features=12,
     )
-    return _exp.as_list()
+    _model_pred = float(_predict_fn(_row.reshape(1, -1))[0])
+    _local_pred = float(_exp.local_pred[0]) if _exp.local_pred is not None else None
+    return {"weights": _exp.as_list(), "local_pred": _local_pred, "model_pred": _model_pred}
 
 
 # ---- Sidebar ----
@@ -201,7 +203,10 @@ with lime_right:
     section_header("LIME (local linear surrogate)")
     if _LIME_AVAILABLE:
         with st.spinner("Computing LIME explanation\u2026"):
-            _lime_weights = _run_lime_explanation(_lime_ride_idx, str(feature_columns[:5]))
+            _lime_result = _run_lime_explanation(_lime_ride_idx, str(feature_columns[:5]))
+        _lime_weights = _lime_result["weights"]
+        _lime_local_pred = _lime_result["local_pred"]
+        _lime_model_pred = _lime_result["model_pred"]
         if _lime_weights:
             _lw_frame = pd.DataFrame(_lime_weights, columns=["feature", "weight"]).sort_values("weight")
             _lime_bar = px.bar(
@@ -226,12 +231,90 @@ with lime_right:
                 coloraxis_showscale=False,
             )
             st.plotly_chart(_lime_bar, width="stretch")
+            _lime_pred_str = f"AED {_lime_local_pred:.2f}" if _lime_local_pred is not None else "N/A"
+            _lime_model_str = f"AED {_lime_model_pred:.2f}" if _lime_model_pred is not None else "N/A"
             st.caption(
+                f"LIME surrogate prediction: **{_lime_pred_str}** \u00b7 XGBoost model prediction: **{_lime_model_str}**  \n"
                 "LIME weights are estimates from a local linear model fitted on perturbed samples around this ride. "
                 "Values approximate contribution magnitude but may differ from SHAP due to the linear surrogate assumption."
             )
     else:
         st.info("Install the `lime` package to enable this panel: `pip install lime`")
+        _lime_result = {"weights": [], "local_pred": None, "model_pred": None}
+        _lime_weights, _lime_local_pred, _lime_model_pred = [], None, None
+
+# ---- Prediction reconciliation & feature agreement table ----
+st.markdown("<br>", unsafe_allow_html=True)
+section_header("SHAP vs LIME \u2014 Prediction reconciliation & feature agreement")
+
+_pred_col1, _pred_col2, _pred_col3 = st.columns(3, gap="small")
+_pred_col1.metric(
+    "XGBoost prediction (SHAP basis)",
+    f"AED {_l_pred:.2f}",
+    help="Exact model output. SHAP values sum to (prediction \u2212 base value).",
+)
+if _LIME_AVAILABLE and _lime_result.get("model_pred") is not None:
+    _pred_col2.metric(
+        "XGBoost prediction (LIME basis)",
+        f"AED {_lime_result['model_pred']:.2f}",
+        help="Same model prediction as seen by the LIME explainer \u2014 should match SHAP\u2019s prediction exactly.",
+    )
+    if _lime_result.get("local_pred") is not None:
+        _pred_col3.metric(
+            "LIME surrogate prediction",
+            f"AED {_lime_result['local_pred']:.2f}",
+            delta=f"{_lime_result['local_pred'] - _l_pred:+.2f} vs model",
+            delta_color="off",
+            help="What LIME\u2019s local linear model predicts. The gap vs the XGBoost prediction shows how well the surrogate approximates the true model at this point.",
+        )
+
+if _LIME_AVAILABLE and _lime_result.get("weights"):
+    _shap_series = pd.Series(dict(zip(sample_features.columns, _l_contrib)), name="SHAP contribution (AED)")
+    _shap_series = _shap_series.reindex(sample_features.columns).fillna(0.0)
+    _lime_series = pd.Series(dict(_lime_result["weights"]), name="LIME weight (AED approx.)")
+
+    # LIME returns condition strings like "route_distance_km > 28.44" or
+    # "0.00 < demand_index <= 1.24". Extract the underlying column name by
+    # finding which known column name appears in the condition string.
+    _known_cols = list(sample_features.columns)
+
+    def _extract_col(condition: str) -> str:
+        for col in _known_cols:
+            if col in condition:
+                return col
+        return condition  # fallback: no match found
+
+    _lime_conditions = [f for f, _ in _lime_result["weights"]]
+    _lime_col_names = [_extract_col(cond) for cond in _lime_conditions]
+
+    _align_df = pd.DataFrame({
+        "LIME condition": _lime_conditions,
+        "Feature": _lime_col_names,
+        "SHAP contribution (AED)": [round(float(_shap_series.get(col, 0.0)), 4) for col in _lime_col_names],
+        "LIME weight (AED approx.)": [round(float(w), 4) for _, w in _lime_result["weights"]],
+    })
+    _align_df["SHAP direction"] = _align_df["SHAP contribution (AED)"].apply(lambda v: "\u2191 raises fare" if v > 0 else ("\u2193 lowers fare" if v < 0 else "neutral"))
+    _align_df["LIME direction"] = _align_df["LIME weight (AED approx.)"].apply(lambda v: "\u2191 raises fare" if v > 0 else ("\u2193 lowers fare" if v < 0 else "neutral"))
+    _align_df["Agree?"] = (_align_df["SHAP direction"] == _align_df["LIME direction"]).map({True: "\u2705 Yes", False: "\u274c No"})
+
+    _agree_pct = (_align_df["Agree?"] == "\u2705 Yes").mean() * 100
+    st.markdown(
+        f"**Direction agreement across {len(_align_df)} features: {_agree_pct:.0f}%** \u2014 "
+        "when SHAP and LIME agree on direction (both push the fare up or both push it down), the feature\u2019s influence is considered robust."
+    )
+    st.dataframe(_align_df, width="stretch", hide_index=True)
+
+    try:
+        from scipy.stats import spearmanr as _spearmanr
+        _shap_vals = _align_df["SHAP contribution (AED)"].values
+        _lime_vals = _align_df["LIME weight (AED approx.)"].values
+        _rho, _pval = _spearmanr(_shap_vals, _lime_vals)
+        st.caption(
+            f"Spearman rank correlation between SHAP and LIME weights: **\u03c1 = {_rho:.3f}** (p = {_pval:.3f}). "
+            "A high \u03c1 (> 0.7) means both methods agree on feature importance ordering even if magnitudes differ."
+        )
+    except Exception:
+        pass
 
 st.caption(
     "\u26a0\ufe0f **SHAP vs LIME:** Shapley values satisfy four desirable axioms (efficiency, symmetry, dummy, additivity). "

@@ -20,7 +20,6 @@ from utils.shap_engine import build_top_driver_frame, plot_beeswarm, plot_depend
 from utils.ui import apply_theme, hero, section_header, sidebar_brand
 
 
-st.set_page_config(page_title="XPrice Operations Dashboard", layout="wide")
 apply_theme()
 
 hero(
